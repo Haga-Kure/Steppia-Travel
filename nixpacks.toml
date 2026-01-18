@@ -1,15 +1,11 @@
 [phases.setup]
 nixPkgs = ["dotnet-sdk_8"]
 
-[phases.install]
-cmds = [
-  "sh -c 'PROJ=$(find . -name Travel.Api.csproj -type f | head -1) && [ -n \"$PROJ\" ] && cd \"$(dirname \"$PROJ\")\" && dotnet restore || (cd Travel.Api && dotnet restore) || dotnet restore'"
-]
-
 [phases.build]
 cmds = [
-  "sh -c 'PROJ=$(find . -name Travel.Api.csproj -type f | head -1) && [ -n \"$PROJ\" ] && cd \"$(dirname \"$PROJ\")\" && dotnet publish -c Release -o ../../out || dotnet publish -c Release -o ../out || (cd Travel.Api && dotnet publish -c Release -o ../out) || dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out'"
+  "dotnet restore Travel.sln",
+  "dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out"
 ]
 
 [start]
-cmd = "sh -c 'if [ -d out ] && [ -f out/Travel.Api.dll ]; then cd out && dotnet Travel.Api.dll; elif [ -d Travel.Api/out ] && [ -f Travel.Api/out/Travel.Api.dll ]; then cd Travel.Api/out && dotnet Travel.Api.dll; else DLL=$(find . -name Travel.Api.dll -type f | head -1) && [ -n \"$DLL\" ] && cd \"$(dirname \"$DLL\")\" && dotnet Travel.Api.dll; fi'"
+cmd = "dotnet out/Travel.Api.dll"

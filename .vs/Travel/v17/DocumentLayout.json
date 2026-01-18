@@ -1,16 +1,7 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "D:\\ProtoType-2\\Travel\\",
-  "Documents": [
-    {
-      "AbsoluteMoniker": "D:0:0:{F11ADFBC-A714-4281-B74B-FADB5161F139}|Travel.Api\\Travel.Api.csproj|d:\\prototype-2\\travel\\travel.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{F11ADFBC-A714-4281-B74B-FADB5161F139}|Travel.Api\\Travel.Api.csproj|solutionrelative:travel.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{F11ADFBC-A714-4281-B74B-FADB5161F139}|Travel.Api\\Travel.Api.csproj|d:\\prototype-2\\travel\\travel.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{F11ADFBC-A714-4281-B74B-FADB5161F139}|Travel.Api\\Travel.Api.csproj|solutionrelative:travel.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
-    }
-  ],
+  "Documents": [],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
@@ -18,36 +9,8 @@
       "DocumentGroups": [
         {
           "DockedWidth": 203,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": -1,
           "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "D:\\ProtoType-2\\Travel\\Travel.Api\\appsettings.json",
-              "RelativeDocumentMoniker": "Travel.Api\\appsettings.json",
-              "ToolTip": "D:\\ProtoType-2\\Travel\\Travel.Api\\appsettings.json",
-              "RelativeToolTip": "Travel.Api\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAABtAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-01-14T17:44:35.439Z",
-              "IsPinned": true,
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "Program.cs",
-              "DocumentMoniker": "D:\\ProtoType-2\\Travel\\Travel.Api\\Program.cs",
-              "RelativeDocumentMoniker": "Travel.Api\\Program.cs",
-              "ToolTip": "D:\\ProtoType-2\\Travel\\Travel.Api\\Program.cs",
-              "RelativeToolTip": "Travel.Api\\Program.cs",
-              "ViewState": "AgIAAEUBAAAAAAAAAAAuwE4BAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-01-14T17:49:18.585Z",
-              "IsPinned": true,
-              "EditorCaption": ""
-            },
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{56df62a4-05a3-4e5b-aa1a-99371ccfb997}"

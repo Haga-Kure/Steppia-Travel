@@ -1,1 +1,0 @@
-web: if [ -d out ] && [ -f out/Travel.Api.dll ]; then cd out && dotnet Travel.Api.dll; elif [ -d Travel.Api/out ] && [ -f Travel.Api/out/Travel.Api.dll ]; then cd Travel.Api/out && dotnet Travel.Api.dll; else DLL=$(find . -name Travel.Api.dll -type f | head -1) && [ -n "$DLL" ] && cd "$(dirname "$DLL")" && dotnet Travel.Api.dll; fi

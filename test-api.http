@@ -1,0 +1,43 @@
+### Test your deployed Travel API
+### Replace YOUR_RAILWAY_URL with your actual Railway URL (e.g., https://your-app.up.railway.app)
+
+@baseUrl = https://steppia-travel-production.up.railway.app
+
+### 1. Health Check - Test MongoDB Connection
+GET {{baseUrl}}/health/mongo
+
+### 2. Get Swagger UI Documentation
+GET {{baseUrl}}/swagger
+
+### 3. List All Tours
+GET {{baseUrl}}/tours
+
+### 4. Get Tour by Slug (replace 'tour-slug' with an actual slug)
+GET {{baseUrl}}/tours/tour-slug
+
+### 5. Create a Booking (example - replace with real data)
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "tourId": "507f1f77bcf86cd799439011",
+  "tourType": "Private",
+  "travelDate": "2024-12-25",
+  "contact": {
+    "fullName": "John Doe",
+    "email": "john@example.com",
+    "phone": "+1234567890",
+    "country": "USA"
+  },
+  "guests": [
+    {
+      "fullName": "John Doe",
+      "age": 30,
+      "passportNo": "AB123456"
+    }
+  ],
+  "specialRequests": "Window seat preferred"
+}
+
+### 6. Get Booking by Code (replace 'BK-XXXXXX' with actual booking code)
+GET {{baseUrl}}/bookings/BK-XXXXXX
