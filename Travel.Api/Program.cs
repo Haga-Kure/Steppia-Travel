@@ -53,6 +53,13 @@ mongoClientSettings.SslSettings = new SslSettings
 mongoClientSettings.ConnectTimeout = TimeSpan.FromSeconds(30);
 mongoClientSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(30);
 
+// Configure serializer to ignore extra fields (fields in DB that aren't in model)
+BsonClassMap.RegisterClassMap<Tour>(cm =>
+{
+    cm.AutoMap();
+    cm.SetIgnoreExtraElements(true); // Ignore fields like 'description' if not in model
+});
+
 Console.WriteLine("[Startup] MongoDB client configured with SSL/TLS");
 
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoClientSettings));

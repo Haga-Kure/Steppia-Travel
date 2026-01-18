@@ -19,6 +19,7 @@ public class Tour
     [BsonElement("type")] public string Type { get; set; } = default!; // "Private" | "Group"
 
     [BsonElement("summary")] public string? Summary { get; set; }
+    [BsonElement("description")] public string? Description { get; set; } // Allow description field from DB
 
     [BsonElement("durationDays")] public int DurationDays { get; set; }
 
