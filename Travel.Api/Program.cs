@@ -27,12 +27,35 @@ if (string.IsNullOrWhiteSpace(mongoConn))
         $"appsettings value: {(string.IsNullOrWhiteSpace(builder.Configuration["Mongo:ConnectionString"]) ? "EMPTY" : "SET")}");
 }
 
+// Log connection string (masked for security)
+var maskedConn = mongoConn.Length > 20 
+    ? mongoConn.Substring(0, 20) + "..." 
+    : "***";
+Console.WriteLine($"[Startup] MongoDB connection string: {maskedConn} (length: {mongoConn.Length})");
+
 var mongoDbName = Environment.GetEnvironmentVariable("MONGO_DATABASENAME")
     ?? Environment.GetEnvironmentVariable("MONGO__DATABASENAME")
     ?? builder.Configuration["Mongo:DatabaseName"]
     ?? "travel_db";
 
-builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoConn));
+// Configure MongoDB client with proper SSL/TLS settings
+var mongoClientSettings = MongoClientSettings.FromConnectionString(mongoConn);
+mongoClientSettings.ServerApi = new ServerApi(ServerApiVersion.V1);
+
+// Configure SSL/TLS for Railway environment
+mongoClientSettings.SslSettings = new SslSettings
+{
+    EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+    CheckCertificateRevocation = false // Railway environment may have certificate issues
+};
+
+// Increase connection timeout for Railway
+mongoClientSettings.ConnectTimeout = TimeSpan.FromSeconds(30);
+mongoClientSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(30);
+
+Console.WriteLine("[Startup] MongoDB client configured with SSL/TLS");
+
+builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoClientSettings));
 builder.Services.AddSingleton<IMongoDatabase>(sp =>
 {
     var client = sp.GetRequiredService<IMongoClient>();
