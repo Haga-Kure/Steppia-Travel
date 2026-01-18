@@ -6,11 +6,18 @@ using Travel.Api.Dtos;
 using Travel.Api.Models;
 
 // Register MongoDB class maps FIRST, before any MongoDB operations or builder creation
-BsonClassMap.RegisterClassMap<Tour>(cm =>
+// This ensures extra fields in the database are ignored during deserialization
+if (!BsonClassMap.IsClassMapRegistered(typeof(Tour)))
 {
-    cm.AutoMap();
-    cm.SetIgnoreExtraElements(true); // Ignore extra fields in DB that aren't in model
-});
+    BsonClassMap.RegisterClassMap<Tour>(cm =>
+    {
+        cm.AutoMap();
+        cm.SetIgnoreExtraElements(true); // Ignore extra fields in DB that aren't in model
+        // Explicitly ensure description field is mapped
+        cm.GetMemberMap(c => c.Description).SetIgnoreIfNull(true);
+    });
+    Console.WriteLine("[Startup] Tour BsonClassMap registered with IgnoreExtraElements=true");
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
