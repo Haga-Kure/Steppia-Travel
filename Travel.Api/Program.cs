@@ -92,30 +92,49 @@ app.UseSwaggerUI();
 // 1) Mongo health check
 app.MapGet("/health/mongo", async (IMongoDatabase db) =>
 {
-    var result = await db.RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1));
-    return Results.Ok(new { ok = true, result = result.ToString() });
+    try
+    {
+        var result = await db.RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1));
+        return Results.Ok(new { ok = true, result = result.ToString() });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(
+            detail: $"MongoDB connection failed: {ex.Message}",
+            statusCode: 503
+        );
+    }
 });
 
 // 2) List tours (raw Bson for now, easiest)
 app.MapGet("/tours", async (IMongoDatabase db) =>
 {
-    var col = db.GetCollection<Tour>("tours");
+    try
+    {
+        var col = db.GetCollection<Tour>("tours");
+        var list = await col.Find(t => t.IsActive).Limit(50).ToListAsync();
 
-    var list = await col.Find(t => t.IsActive).Limit(50).ToListAsync();
+        var dto = list.Select(t => new TourDto(
+            t.Id.ToString(),
+            t.Slug,
+            t.Title,
+            t.Type,
+            t.Summary,
+            t.DurationDays,
+            t.BasePrice,
+            t.Currency,
+            t.Locations
+        )).ToList();
 
-    var dto = list.Select(t => new TourDto(
-        t.Id.ToString(),
-        t.Slug,
-        t.Title,
-        t.Type,
-        t.Summary,
-        t.DurationDays,
-        t.BasePrice,
-        t.Currency,
-        t.Locations
-    )).ToList();
-
-    return Results.Ok(dto);
+        return Results.Ok(dto);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(
+            detail: $"Error fetching tours: {ex.Message}",
+            statusCode: 500
+        );
+    }
 });
 
 app.MapGet("/tours/{slug}", async (string slug, IMongoDatabase db) =>
