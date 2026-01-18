@@ -6,11 +6,16 @@ using Travel.Api.Dtos;
 using Travel.Api.Models;
 
 // Register MongoDB class maps FIRST, before any MongoDB operations or builder creation
-BsonClassMap.RegisterClassMap<Tour>(cm =>
+// Note: Tour class also has [BsonIgnoreExtraElements] attribute for double protection
+if (!BsonClassMap.IsClassMapRegistered(typeof(Tour)))
 {
-    cm.AutoMap();
-    cm.SetIgnoreExtraElements(true); // Ignore extra fields in DB that aren't in model
-});
+    BsonClassMap.RegisterClassMap<Tour>(cm =>
+    {
+        cm.AutoMap();
+        cm.SetIgnoreExtraElements(true); // Ignore extra fields in DB that aren't in model
+    });
+    Console.WriteLine("[Startup] Tour BsonClassMap registered with IgnoreExtraElements");
+}
 
 var builder = WebApplication.CreateBuilder(args);
 

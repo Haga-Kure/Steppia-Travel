@@ -10,6 +10,7 @@ public class TourImage
     [BsonElement("isCover")] public bool IsCover { get; set; }
 }
 
+[BsonIgnoreExtraElements] // This tells MongoDB to ignore any fields in the database that aren't in this class
 public class Tour
 {
     [BsonId] public ObjectId Id { get; set; }
