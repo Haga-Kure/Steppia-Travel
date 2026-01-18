@@ -18,16 +18,19 @@ Set the following environment variables:
 
 #### Railway Setup
 
-1. **Root Directory**: Set to `Travel` (the folder containing `Travel.Api`)
-2. **Build Command**: `cd Travel.Api && dotnet publish -c Release -o ../out`
-3. **Start Command**: `cd out && dotnet Travel.Api.dll`
+1. **Root Directory**: 
+   - If deploying from the `Travel` folder: Leave empty or set to `.`
+   - If deploying from repository root: Set to `Travel`
+2. **Build Command**: (Auto-configured via `nixpacks.toml`)
+3. **Start Command**: (Auto-configured via `nixpacks.toml`)
 4. **Environment Variables** (in Railway Variables tab):
    - `MONGO_CONNECTIONSTRING` = `mongodb+srv://username:password@cluster.mongodb.net/`
    - `MONGO_DATABASENAME` = `travel_db` (optional)
+   - `PORT` = `8080` (or match your Railway service port)
 
 The application will automatically use environment variables if they are set, otherwise it will fall back to `appsettings.json`.
 
-**Note**: Railway configuration files (`railway.json` and `nixpacks.toml`) are included to help with deployment.
+**Note**: Railway configuration files (`railway.json` and `nixpacks.toml`) are included to help with deployment. The build commands will automatically detect the correct directory structure.
 
 ## Running Locally
 

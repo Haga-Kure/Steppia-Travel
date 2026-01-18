@@ -2,10 +2,14 @@
 nixPkgs = ["dotnet-sdk_8"]
 
 [phases.install]
-cmds = ["cd Travel.Api && dotnet restore"]
+cmds = [
+  "if [ -d Travel.Api ]; then cd Travel.Api && dotnet restore; else dotnet restore Travel.Api/Travel.Api.csproj; fi"
+]
 
 [phases.build]
-cmds = ["cd Travel.Api && dotnet publish -c Release -o ../out"]
+cmds = [
+  "if [ -d Travel.Api ]; then cd Travel.Api && dotnet publish -c Release -o ../out; else dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out; fi"
+]
 
 [start]
-cmd = "cd out && dotnet Travel.Api.dll"
+cmd = "if [ -d out ]; then cd out && dotnet Travel.Api.dll; else dotnet Travel.Api/bin/Release/net8.0/Travel.Api.dll; fi"
