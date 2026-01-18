@@ -8,8 +8,8 @@ cmds = [
 
 [phases.build]
 cmds = [
-  "dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out --self-contained false"
+  "dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out -r linux-x64 --self-contained true"
 ]
 
 [start]
-cmd = "cd out && dotnet Travel.Api.dll"
+cmd = "cd out && ./Travel.Api"
