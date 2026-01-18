@@ -1,15 +1,12 @@
 [phases.setup]
-nixPkgs = ["dotnet-sdk_8", "dotnet-runtime_8"]
-
-[phases.install]
-cmds = [
-  "dotnet restore Travel.sln || dotnet restore Travel.Api/Travel.Api.csproj"
-]
+nixPkgs = ["dotnet-sdk_8"]
 
 [phases.build]
 cmds = [
-  "dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out -r linux-x64 --self-contained true"
+  "dotnet --info",
+  "dotnet restore Travel.sln",
+  "dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out"
 ]
 
 [start]
-cmd = "cd out && ./Travel.Api"
+cmd = "dotnet out/Travel.Api.dll"
