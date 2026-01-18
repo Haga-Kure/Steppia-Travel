@@ -17,12 +17,19 @@ builder.Services.AddSwaggerGen();
 // Environment variable format: MONGO__CONNECTIONSTRING or MONGO_CONNECTIONSTRING
 var mongoConn = Environment.GetEnvironmentVariable("MONGO_CONNECTIONSTRING")
     ?? Environment.GetEnvironmentVariable("MONGO__CONNECTIONSTRING")
-    ?? builder.Configuration["Mongo:ConnectionString"]
-    ?? throw new InvalidOperationException("MongoDB connection string is required. Set MONGO_CONNECTIONSTRING environment variable or configure in appsettings.json");
+    ?? builder.Configuration["Mongo:ConnectionString"];
 
-var mongoDbName = builder.Configuration["Mongo:DatabaseName"] 
-    ?? Environment.GetEnvironmentVariable("MONGO_DATABASENAME")
+if (string.IsNullOrWhiteSpace(mongoConn))
+{
+    throw new InvalidOperationException(
+        "MongoDB connection string is required. " +
+        $"MONGO_CONNECTIONSTRING env var: {(Environment.GetEnvironmentVariable("MONGO_CONNECTIONSTRING") != null ? "SET" : "NOT SET")}, " +
+        $"appsettings value: {(string.IsNullOrWhiteSpace(builder.Configuration["Mongo:ConnectionString"]) ? "EMPTY" : "SET")}");
+}
+
+var mongoDbName = Environment.GetEnvironmentVariable("MONGO_DATABASENAME")
     ?? Environment.GetEnvironmentVariable("MONGO__DATABASENAME")
+    ?? builder.Configuration["Mongo:DatabaseName"]
     ?? "travel_db";
 
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoConn));
@@ -64,9 +71,16 @@ var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
 {
     builder.WebHost.UseUrls($"http://0.0.0.0:{portNumber}");
+    Console.WriteLine($"[Startup] Configured to listen on port {portNumber}");
+}
+else
+{
+    Console.WriteLine($"[Startup] PORT environment variable not set or invalid. Using default ports.");
 }
 
 var app = builder.Build();
+
+Console.WriteLine($"[Startup] Application built successfully. Listening on: {string.Join(", ", app.Urls)}");
 
 app.UseSwagger();
 app.UseSwaggerUI();
