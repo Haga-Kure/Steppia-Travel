@@ -3,13 +3,13 @@ nixPkgs = ["dotnet-sdk_8"]
 
 [phases.install]
 cmds = [
-  "if [ -d Travel.Api ]; then cd Travel.Api && dotnet restore; else dotnet restore Travel.Api/Travel.Api.csproj; fi"
+  "find . -name 'Travel.Api.csproj' -type f | head -1 | xargs dirname | xargs -I {} sh -c 'cd {} && dotnet restore'"
 ]
 
 [phases.build]
 cmds = [
-  "if [ -d Travel.Api ]; then cd Travel.Api && dotnet publish -c Release -o ../out; else dotnet publish Travel.Api/Travel.Api.csproj -c Release -o out; fi"
+  "find . -name 'Travel.Api.csproj' -type f | head -1 | xargs dirname | xargs -I {} sh -c 'cd {} && dotnet publish -c Release -o ../../out || dotnet publish -c Release -o ../out'"
 ]
 
 [start]
-cmd = "if [ -d out ]; then cd out && dotnet Travel.Api.dll; else dotnet Travel.Api/bin/Release/net8.0/Travel.Api.dll; fi"
+cmd = "if [ -d out ]; then cd out && dotnet Travel.Api.dll; elif [ -d Travel.Api/out ]; then cd Travel.Api/out && dotnet Travel.Api.dll; else find . -name 'Travel.Api.dll' -path '*/out/*' -o -path '*/Release/*' | head -1 | xargs dirname | xargs -I {} sh -c 'cd {} && dotnet Travel.Api.dll'; fi"
