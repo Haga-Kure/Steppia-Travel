@@ -66,16 +66,20 @@ static async Task ExpireBookingIfNeeded(IMongoCollection<Booking> bookings, Book
     }
 }
 
-// Configure port for Railway before building the app
+// Configure port for Railway - Railway sets PORT env var to match the service port
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
 {
     builder.WebHost.UseUrls($"http://0.0.0.0:{portNumber}");
-    Console.WriteLine($"[Startup] Configured to listen on port {portNumber}");
+    Console.WriteLine($"[Startup] Configured to listen on port {portNumber} (from PORT env var)");
 }
 else
 {
-    Console.WriteLine($"[Startup] PORT environment variable not set or invalid. Using default ports.");
+    // Fallback: try to use Railway's default or common ports
+    var defaultPort = 8000; // Railway production default
+    builder.WebHost.UseUrls($"http://0.0.0.0:{defaultPort}");
+    Console.WriteLine($"[Startup] PORT environment variable not set. Using default port {defaultPort}");
+    Console.WriteLine($"[Startup] WARNING: Make sure Railway PORT env var matches your service port (8000 for production, 8100 for test)");
 }
 
 var app = builder.Build();
