@@ -21,8 +21,18 @@ Set the following environment variables:
 1. **Root Directory**: 
    - If deploying from the `Travel` folder: Leave empty or set to `.`
    - If deploying from repository root: Set to `Travel`
-2. **Build Command**: (Auto-configured via `nixpacks.toml`)
-3. **Start Command**: (Auto-configured via `nixpacks.toml`)
+
+2. **IMPORTANT - Remove Custom Build Command**:
+   - Go to Railway Dashboard → Your Service → Settings → "Build & Deploy"
+   - **DELETE or CLEAR** any "Custom Build Command" 
+   - **DELETE or CLEAR** any "Custom Start Command"
+   - Let Railway use the `nixpacks.toml` configuration automatically
+
+3. **If you must use Custom Build Command**, use this:
+   ```bash
+   find . -name "Travel.Api.csproj" -type f | head -1 | xargs dirname | xargs -I {} sh -c 'cd {} && dotnet restore && dotnet publish -c Release -o ../../out'
+   ```
+
 4. **Environment Variables** (in Railway Variables tab):
    - `MONGO_CONNECTIONSTRING` = `mongodb+srv://username:password@cluster.mongodb.net/`
    - `MONGO_DATABASENAME` = `travel_db` (optional)
