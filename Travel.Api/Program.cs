@@ -10,6 +10,13 @@ using Travel.Api.Dtos;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Register MongoDB class maps FIRST, before any MongoDB operations
+BsonClassMap.RegisterClassMap<Tour>(cm =>
+{
+    cm.AutoMap();
+    cm.SetIgnoreExtraElements(true); // Ignore extra fields in DB that aren't in model
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -52,13 +59,6 @@ mongoClientSettings.SslSettings = new SslSettings
 // Increase connection timeout for Railway
 mongoClientSettings.ConnectTimeout = TimeSpan.FromSeconds(30);
 mongoClientSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(30);
-
-// Configure serializer to ignore extra fields (fields in DB that aren't in model)
-BsonClassMap.RegisterClassMap<Tour>(cm =>
-{
-    cm.AutoMap();
-    cm.SetIgnoreExtraElements(true); // Ignore fields like 'description' if not in model
-});
 
 Console.WriteLine("[Startup] MongoDB client configured with SSL/TLS");
 
