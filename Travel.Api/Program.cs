@@ -61,6 +61,13 @@ static async Task ExpireBookingIfNeeded(IMongoCollection<Booking> bookings, Book
 
 var app = builder.Build();
 
+// Configure port for Railway (uses PORT environment variable automatically)
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
+{
+    app.Urls.Add($"http://0.0.0.0:{portNumber}");
+}
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
