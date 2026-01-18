@@ -15,9 +15,9 @@ builder.Services.AddSwaggerGen();
 
 // Mongo - Read from environment variables (Railway/Production) or appsettings.json (Development)
 // Environment variable format: MONGO__CONNECTIONSTRING or MONGO_CONNECTIONSTRING
-var mongoConn = builder.Configuration["Mongo:ConnectionString"] 
-    ?? Environment.GetEnvironmentVariable("MONGO_CONNECTIONSTRING")
+var mongoConn = Environment.GetEnvironmentVariable("MONGO_CONNECTIONSTRING")
     ?? Environment.GetEnvironmentVariable("MONGO__CONNECTIONSTRING")
+    ?? builder.Configuration["Mongo:ConnectionString"]
     ?? throw new InvalidOperationException("MongoDB connection string is required. Set MONGO_CONNECTIONSTRING environment variable or configure in appsettings.json");
 
 var mongoDbName = builder.Configuration["Mongo:DatabaseName"] 
@@ -59,14 +59,14 @@ static async Task ExpireBookingIfNeeded(IMongoCollection<Booking> bookings, Book
     }
 }
 
-var app = builder.Build();
-
-// Configure port for Railway (uses PORT environment variable automatically)
+// Configure port for Railway before building the app
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
 {
-    app.Urls.Add($"http://0.0.0.0:{portNumber}");
+    builder.WebHost.UseUrls($"http://0.0.0.0:{portNumber}");
 }
+
+var app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
