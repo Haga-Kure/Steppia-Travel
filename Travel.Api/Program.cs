@@ -129,7 +129,7 @@ app.MapGet("/health/mongo", async (IMongoDatabase db) =>
     }
 });
 
-// 2) List tours (raw Bson for now, easiest)
+// 2) List tours
 app.MapGet("/tours", async (IMongoDatabase db) =>
 {
     try
@@ -137,17 +137,32 @@ app.MapGet("/tours", async (IMongoDatabase db) =>
         var col = db.GetCollection<Tour>("tours");
         var list = await col.Find(t => t.IsActive).Limit(50).ToListAsync();
 
-        var dto = list.Select(t => new TourDto(
-            t.Id.ToString(),
-            t.Slug ?? string.Empty,
-            t.Title ?? string.Empty,
-            t.Type ?? string.Empty,
-            t.Summary,
-            t.DurationDays,
-            t.BasePrice,
-            t.Currency ?? "USD",
-            t.Locations ?? new List<string>()
-        )).ToList();
+        Console.WriteLine($"[Info] Found {list.Count} active tours");
+
+        // Map to DTO with null safety
+        var dto = new List<TourDto>();
+        foreach (var t in list)
+        {
+            try
+            {
+                dto.Add(new TourDto(
+                    t.Id.ToString(),
+                    t.Slug ?? string.Empty,
+                    t.Title ?? string.Empty,
+                    t.Type ?? string.Empty,
+                    t.Summary,
+                    t.DurationDays,
+                    t.BasePrice,
+                    t.Currency ?? "USD",
+                    t.Locations ?? new List<string>()
+                ));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Warning] Failed to map tour {t.Id}: {ex.Message}");
+                // Skip this tour and continue
+            }
+        }
 
         return Results.Ok(dto);
     }
@@ -155,6 +170,10 @@ app.MapGet("/tours", async (IMongoDatabase db) =>
     {
         Console.WriteLine($"[Error] /tours endpoint failed: {ex.Message}");
         Console.WriteLine($"[Error] Stack trace: {ex.StackTrace}");
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"[Error] Inner exception: {ex.InnerException.Message}");
+        }
         return Results.Problem(
             detail: $"Error fetching tours: {ex.Message}",
             statusCode: 500
