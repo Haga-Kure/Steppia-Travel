@@ -22,11 +22,12 @@ Set the following environment variables:
    - If deploying from the `Travel` folder: Leave empty or set to `.`
    - If deploying from repository root: Set to `Travel`
 
-2. **IMPORTANT - Remove Custom Build Command**:
+2. **IMPORTANT - Railway Build Configuration**:
    - Go to Railway Dashboard → Your Service → Settings → "Build & Deploy"
-   - **DELETE or CLEAR** any "Custom Build Command" 
-   - **DELETE or CLEAR** any "Custom Start Command"
-   - Let Railway use the `nixpacks.toml` configuration automatically
+   - **Option A (Recommended)**: DELETE or CLEAR any "Custom Build Command" and "Custom Start Command"
+     - Let Railway auto-detect and use `nixpacks.toml` or `Dockerfile`
+   - **Option B**: If Railway isn't detecting nixpacks.toml, set Builder to "Dockerfile" 
+     - Railway will use the `Dockerfile` for building
 
 3. **If you must use Custom Build Command**, use this:
    ```bash
