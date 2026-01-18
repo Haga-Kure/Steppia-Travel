@@ -3,13 +3,13 @@ nixPkgs = ["dotnet-sdk_8"]
 
 [phases.install]
 cmds = [
-  "find . -name 'Travel.Api.csproj' -type f | head -1 | xargs dirname | xargs -I {} sh -c 'cd {} && dotnet restore'"
+  "PROJ_DIR=$(find . -name 'Travel.Api.csproj' -type f | head -1 | xargs dirname) && cd \"$PROJ_DIR\" && dotnet restore"
 ]
 
 [phases.build]
 cmds = [
-  "find . -name 'Travel.Api.csproj' -type f | head -1 | xargs dirname | xargs -I {} sh -c 'cd {} && dotnet publish -c Release -o ../../out || dotnet publish -c Release -o ../out'"
+  "PROJ_DIR=$(find . -name 'Travel.Api.csproj' -type f | head -1 | xargs dirname) && cd \"$PROJ_DIR\" && dotnet publish -c Release -o ../../out || (cd \"$PROJ_DIR\" && dotnet publish -c Release -o ../out)"
 ]
 
 [start]
-cmd = "if [ -d out ]; then cd out && dotnet Travel.Api.dll; elif [ -d Travel.Api/out ]; then cd Travel.Api/out && dotnet Travel.Api.dll; else find . -name 'Travel.Api.dll' -path '*/out/*' -o -path '*/Release/*' | head -1 | xargs dirname | xargs -I {} sh -c 'cd {} && dotnet Travel.Api.dll'; fi"
+cmd = "if [ -d out ]; then cd out && dotnet Travel.Api.dll; else PROJ_DIR=$(find . -name 'Travel.Api.dll' -type f | head -1 | xargs dirname) && cd \"$PROJ_DIR\" && dotnet Travel.Api.dll; fi"
