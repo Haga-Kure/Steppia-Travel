@@ -139,20 +139,22 @@ app.MapGet("/tours", async (IMongoDatabase db) =>
 
         var dto = list.Select(t => new TourDto(
             t.Id.ToString(),
-            t.Slug,
-            t.Title,
-            t.Type,
+            t.Slug ?? string.Empty,
+            t.Title ?? string.Empty,
+            t.Type ?? string.Empty,
             t.Summary,
             t.DurationDays,
             t.BasePrice,
-            t.Currency,
-            t.Locations
+            t.Currency ?? "USD",
+            t.Locations ?? new List<string>()
         )).ToList();
 
         return Results.Ok(dto);
     }
     catch (Exception ex)
     {
+        Console.WriteLine($"[Error] /tours endpoint failed: {ex.Message}");
+        Console.WriteLine($"[Error] Stack trace: {ex.StackTrace}");
         return Results.Problem(
             detail: $"Error fetching tours: {ex.Message}",
             statusCode: 500
