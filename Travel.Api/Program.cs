@@ -1,21 +1,18 @@
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using System.Text.Json.Serialization;
 using Travel.Api.Dtos;
 using Travel.Api.Models;
-using MongoDB.Bson;
-using MongoDB.Driver;
-using Travel.Api.Models;
-using Travel.Api.Dtos;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Register MongoDB class maps FIRST, before any MongoDB operations
+// Register MongoDB class maps FIRST, before any MongoDB operations or builder creation
 BsonClassMap.RegisterClassMap<Tour>(cm =>
 {
     cm.AutoMap();
     cm.SetIgnoreExtraElements(true); // Ignore extra fields in DB that aren't in model
 });
+
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
