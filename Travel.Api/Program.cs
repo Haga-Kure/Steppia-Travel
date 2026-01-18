@@ -13,9 +13,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Mongo
-var mongoConn = builder.Configuration["Mongo:ConnectionString"]!;
-var mongoDbName = builder.Configuration["Mongo:DatabaseName"]!;
+// Mongo - Read from environment variables (Railway/Production) or appsettings.json (Development)
+// Environment variable format: MONGO__CONNECTIONSTRING or MONGO_CONNECTIONSTRING
+var mongoConn = builder.Configuration["Mongo:ConnectionString"] 
+    ?? Environment.GetEnvironmentVariable("MONGO_CONNECTIONSTRING")
+    ?? Environment.GetEnvironmentVariable("MONGO__CONNECTIONSTRING")
+    ?? throw new InvalidOperationException("MongoDB connection string is required. Set MONGO_CONNECTIONSTRING environment variable or configure in appsettings.json");
+
+var mongoDbName = builder.Configuration["Mongo:DatabaseName"] 
+    ?? Environment.GetEnvironmentVariable("MONGO_DATABASENAME")
+    ?? Environment.GetEnvironmentVariable("MONGO__DATABASENAME")
+    ?? "travel_db";
 
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoConn));
 builder.Services.AddSingleton<IMongoDatabase>(sp =>

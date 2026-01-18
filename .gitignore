@@ -28,6 +28,10 @@ bld/
 # Visual Studio cache/options directory
 .vs/
 
+# Sensitive configuration files
+appsettings.Development.json
+**/appsettings.Development.json
+
 # NuGet Packages
 *.nupkg
 *.snupkg
