@@ -385,22 +385,34 @@ app.MapGet("/tours", async (
 
         Console.WriteLine($"[Info] Found {list.Count} active tours (page {page}, total: {total})");
 
-        // Map to DTO with null safety
+        // Map to DTO with full tour details
         var dto = new List<TourDto>();
         foreach (var t in list)
         {
             try
             {
                 dto.Add(new TourDto(
-                    t.Id.ToString(),
-                    t.Slug ?? string.Empty,
-                    t.Title ?? string.Empty,
-                    t.Type ?? string.Empty,
-                    t.Summary,
-                    t.DurationDays,
-                    t.BasePrice,
-                    t.Currency ?? "USD",
-                    t.Locations ?? new List<string>()
+                    Id: t.Id.ToString(),
+                    Slug: t.Slug ?? string.Empty,
+                    Title: t.Title ?? string.Empty,
+                    Type: t.Type ?? string.Empty,
+                    Summary: t.Summary,
+                    Description: t.Description,
+                    DurationDays: t.DurationDays,
+                    Nights: t.Nights,
+                    Region: t.Region,
+                    TotalDistanceKm: t.TotalDistanceKm,
+                    TravelStyle: t.TravelStyle,
+                    Highlights: t.Highlights,
+                    Accommodation: t.Accommodation,
+                    Itinerary: t.Itinerary,
+                    Activities: t.Activities,
+                    IdealFor: t.IdealFor,
+                    BasePrice: t.BasePrice,
+                    Currency: t.Currency ?? "USD",
+                    Locations: t.Locations ?? new List<string>(),
+                    Images: t.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList()
+                            ?? new List<TourImageDto>()
                 ));
             }
             catch (Exception ex)

@@ -1,4 +1,6 @@
-﻿namespace Travel.Api.Dtos;
+﻿using Travel.Api.Models;
+
+namespace Travel.Api.Dtos;
 
 public record TourDto(
     string Id,
@@ -6,8 +8,19 @@ public record TourDto(
     string Title,
     string Type,
     string? Summary,
+    string? Description,
     int DurationDays,
+    int? Nights,
+    string? Region,
+    int? TotalDistanceKm,
+    List<string>? TravelStyle,
+    List<string>? Highlights,
+    TourAccommodation? Accommodation,
+    List<TourItineraryItem>? Itinerary,
+    List<string>? Activities,
+    List<string>? IdealFor,
     decimal BasePrice,
     string Currency,
-    List<string> Locations
+    List<string> Locations,
+    List<TourImageDto> Images
 );
