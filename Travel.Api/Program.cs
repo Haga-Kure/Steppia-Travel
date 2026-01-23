@@ -69,7 +69,7 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "http://localhost:4200",  // Angular dev server
-                "https://your-frontend-domain.com"  // Production frontend
+                "https://steppia-travel.netlify.app"  // Production frontend (Netlify)
             )
             .AllowAnyMethod()
             .AllowAnyHeader()
