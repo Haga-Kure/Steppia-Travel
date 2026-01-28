@@ -61,4 +61,5 @@ public class Tour
 
     [BsonElement("createdAt")] public DateTime CreatedAt { get; set; }
     [BsonElement("updatedAt")] public DateTime UpdatedAt { get; set; }
+    [BsonElement("bobbleTitle")] public string bobbleTitle { get; set; }
 }

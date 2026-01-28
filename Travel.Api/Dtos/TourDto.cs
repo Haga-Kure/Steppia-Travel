@@ -22,5 +22,6 @@ public record TourDto(
     decimal BasePrice,
     string Currency,
     List<string> Locations,
-    List<TourImageDto> Images
+    List<TourImageDto> Images,
+    string bobbleTitle
 );
