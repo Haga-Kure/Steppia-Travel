@@ -1,4 +1,4 @@
-﻿using Travel.Api.Models;
+using Travel.Api.Models;
 
 namespace Travel.Api.Dtos;
 
@@ -23,5 +23,5 @@ public record TourDto(
     string Currency,
     List<string> Locations,
     List<TourImageDto> Images,
-    string bobbleTitle
+    string? BobbleTitle
 );

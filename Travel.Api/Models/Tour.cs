@@ -1,4 +1,4 @@
-﻿using MongoDB.Bson;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Travel.Api.Models;
@@ -61,5 +61,5 @@ public class Tour
 
     [BsonElement("createdAt")] public DateTime CreatedAt { get; set; }
     [BsonElement("updatedAt")] public DateTime UpdatedAt { get; set; }
-    [BsonElement("bobbleTitle")] public string bobbleTitle { get; set; }
+    [BsonElement("bobbleTitle")] public string? BobbleTitle { get; set; }
 }

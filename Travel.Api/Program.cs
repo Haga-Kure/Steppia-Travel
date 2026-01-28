@@ -412,7 +412,8 @@ app.MapGet("/tours", async (
                     Currency: t.Currency ?? "USD",
                     Locations: t.Locations ?? new List<string>(),
                     Images: t.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList()
-                            ?? new List<TourImageDto>()
+                            ?? new List<TourImageDto>(),
+                    BobbleTitle: t.BobbleTitle
                 ));
             }
             catch (Exception ex)
