@@ -10,7 +10,7 @@ public record AdminTourDto(
     int DurationDays,
     decimal BasePrice,
     string Currency,
-    List<string> Locations,
+    List<TourLocationDto> Locations,
     List<TourImageDto> Images,
     bool IsActive,
     DateTime CreatedAt,

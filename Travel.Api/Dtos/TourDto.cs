@@ -21,7 +21,9 @@ public record TourDto(
     List<string>? IdealFor,
     decimal BasePrice,
     string Currency,
-    List<string> Locations,
+    List<TourLocationDto> Locations,
     List<TourImageDto> Images,
     string? BobbleTitle
 );
+
+public record TourLocationDto(string Name, string? Latitude, string? Longitude);

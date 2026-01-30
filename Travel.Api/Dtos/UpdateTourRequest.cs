@@ -9,7 +9,7 @@ public record UpdateTourRequest(
     int? DurationDays,
     decimal? BasePrice,
     string? Currency,
-    List<string>? Locations,
+    List<TourLocationRequest>? Locations,
     List<TourImageRequest>? Images,
     bool? IsActive
 );

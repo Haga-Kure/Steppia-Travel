@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson.Serialization.Serializers;
 
 namespace Travel.Api.Models;
 
@@ -24,6 +25,13 @@ public class TourItineraryItem
     [BsonElement("notes")] public string? Notes { get; set; }
     [BsonElement("stay")] public string? Stay { get; set; }
     [BsonElement("distanceKm")] public int? DistanceKm { get; set; }
+}
+
+public class TourLocation
+{
+    [BsonElement("name")] public string Name { get; set; } = string.Empty;
+    [BsonElement("latitude")] public string? Latitude { get; set; }
+    [BsonElement("longitude")] public string? Longitude { get; set; }
 }
 
 [BsonIgnoreExtraElements] // This tells MongoDB to ignore any fields in the database that aren't in this class
@@ -54,7 +62,9 @@ public class Tour
     [BsonElement("basePrice")] public decimal BasePrice { get; set; }
     [BsonElement("currency")] public string Currency { get; set; } = "USD";
 
-    [BsonElement("locations")] public List<string> Locations { get; set; } = new();
+    [BsonElement("locations")]
+    [BsonSerializer(typeof(TourLocationListSerializer))]
+    public List<TourLocation> Locations { get; set; } = new();
     [BsonElement("images")] public List<TourImage> Images { get; set; } = new();
 
     [BsonElement("isActive")] public bool IsActive { get; set; } = true;

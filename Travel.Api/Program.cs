@@ -410,7 +410,7 @@ app.MapGet("/tours", async (
                     IdealFor: t.IdealFor,
                     BasePrice: t.BasePrice,
                     Currency: t.Currency ?? "USD",
-                    Locations: t.Locations ?? new List<string>(),
+                    Locations: (t.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
                     Images: t.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList()
                             ?? new List<TourImageDto>(),
                     BobbleTitle: t.BobbleTitle
@@ -977,7 +977,7 @@ app.MapGet("/admin/tours", async (IMongoDatabase db, int page = 1, int pageSize 
             t.DurationDays,
             t.BasePrice,
             t.Currency ?? "USD",
-            t.Locations ?? new List<string>(),
+            (t.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
             t.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList() ?? new List<TourImageDto>(),
             t.IsActive,
             t.CreatedAt,
@@ -1026,7 +1026,7 @@ app.MapPost("/admin/tours", async (CreateTourRequest req, IMongoDatabase db) =>
             DurationDays = req.DurationDays,
             BasePrice = req.BasePrice,
             Currency = req.Currency ?? "USD",
-            Locations = req.Locations ?? new List<string>(),
+            Locations = (req.Locations ?? new List<TourLocationRequest>()).Select(loc => new TourLocation { Name = loc.Name ?? "", Latitude = loc.Latitude, Longitude = loc.Longitude }).ToList(),
             Images = req.Images?.Select(img => new TourImage
             {
                 Url = img.Url,
@@ -1050,7 +1050,7 @@ app.MapPost("/admin/tours", async (CreateTourRequest req, IMongoDatabase db) =>
             tour.DurationDays,
             tour.BasePrice,
             tour.Currency,
-            tour.Locations,
+            (tour.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
             tour.Images.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList(),
             tour.IsActive,
             tour.CreatedAt,
@@ -1108,7 +1108,7 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
         if (!string.IsNullOrWhiteSpace(req.Currency))
             update = update.Set(x => x.Currency, req.Currency);
         if (req.Locations is not null)
-            update = update.Set(x => x.Locations, req.Locations);
+            update = update.Set(x => x.Locations, req.Locations.Select(loc => new TourLocation { Name = loc.Name ?? "", Latitude = loc.Latitude, Longitude = loc.Longitude }).ToList());
         if (req.Images is not null)
             update = update.Set(x => x.Images, req.Images.Select(img => new TourImage
             {
@@ -1133,7 +1133,7 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
             tour.DurationDays,
             tour.BasePrice,
             tour.Currency ?? "USD",
-            tour.Locations ?? new List<string>(),
+            (tour.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
             tour.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList() ?? new List<TourImageDto>(),
             tour.IsActive,
             tour.CreatedAt,

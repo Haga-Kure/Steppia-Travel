@@ -9,9 +9,11 @@ public record CreateTourRequest(
     int DurationDays,
     decimal BasePrice,
     string Currency,
-    List<string> Locations,
+    List<TourLocationRequest> Locations,
     List<TourImageRequest> Images
 );
+
+public record TourLocationRequest(string Name, string? Latitude, string? Longitude);
 
 public record TourImageRequest(
     string Url,
