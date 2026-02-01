@@ -6,10 +6,34 @@
 export const API_BASE_URL = 'https://steppia-travel-production.up.railway.app';
 ```
 
+## Authentication (Frontend–Backend contract)
+
+The backend supports a **single login** used for both users and admins. The frontend uses the response `role` to show the admin section or user section.
+
+- **Single login:** `POST /auth/login`  
+  Body: `{ "login": "<email or username>", "password": "..." }`
+  - **User:** send **email** → backend looks up in `users` by email.
+  - **Admin:** send **username** → backend looks up in `admins` by username.
+
+- **Response (same for both):**  
+  `{ "token": "<JWT>", "expiresAt": "...", "role": "user"|"admin", "userId", "username", "email", "fullName", "phone" }`  
+  (Nullable fields may be `null` depending on role.)
+
+- **No GET /users/me:**  
+  The frontend does **not** call GET /users/me (or any “current user” endpoint) to verify the token. It only uses the JWT from the login response. The backend validates the JWT on each request; a “me” endpoint is not required for this frontend.
+
+- **Admin APIs:**  
+  Same JWT in `Authorization: Bearer <token>`. The backend requires role **admin**: **403** if not admin, **401** if token is missing or invalid.
+
+See `FRONTEND_AUTH_FOR_BACKEND.md` in the frontend repo for full detail.
+
 ## API Endpoints Summary
 
 ```typescript
 const API_ENDPOINTS = {
+  // Auth (single login for user and admin)
+  authLogin: `${API_BASE_URL}/auth/login`,
+  
   // Health
   health: `${API_BASE_URL}/health/mongo`,
   
