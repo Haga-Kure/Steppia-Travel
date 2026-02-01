@@ -304,7 +304,10 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     catch (Exception ex)
     {
         Console.WriteLine($"[Email] Failed to send to {toEmail}: {ex.GetType().Name}: {ex.Message}");
-        Console.WriteLine($"[Email] If using port 465 and you see certificate/SSL errors, set SMTP_SKIP_SSL_VERIFY=true. On Railway, prefer RESEND_API_KEY (HTTP) instead of SMTP.");
+        if (ex is TimeoutException)
+            Console.WriteLine($"[Email] SMTP timed out (often blocked on Railway). Set RESEND_API_KEY to send via Resend instead.");
+        else
+            Console.WriteLine($"[Email] For port 465 SSL errors set SMTP_SKIP_SSL_VERIFY=true. Prefer RESEND_API_KEY on Railway.");
     }
 }
 
