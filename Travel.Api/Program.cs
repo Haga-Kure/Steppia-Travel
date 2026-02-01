@@ -251,22 +251,24 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
         Text = $"Your confirmation code is: {code}. It expires in 15 minutes."
     };
 
+    // Port 465 = SMTPS (implicit SSL); 587 = STARTTLS. Some hosts block 587 – try 465.
+    var secureOptions = port == 465 ? SecureSocketOptions.SslOnConnect
+        : (useSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
+
     try
     {
         using var client = new SmtpClient();
-        client.Timeout = 15000; // 15 seconds – avoid long hangs (e.g. Railway outbound SMTP)
-        await client.ConnectAsync(host, port, useSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
+        client.Timeout = 20000; // 20 seconds
+        await client.ConnectAsync(host, port, secureOptions);
         if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(password))
             await client.AuthenticateAsync(user, password);
         await client.SendAsync(message);
         await client.DisconnectAsync(true);
-        Console.WriteLine($"[Email] Host={host} Port={port} User={user} SSL={useSsl}");
         Console.WriteLine($"[Email] Confirmation code sent to {toEmail}");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Email] Host={host} Port={port} User={user} SSL={useSsl}");
-        Console.WriteLine($"[Email] Failed to send confirmation to {toEmail}: {ex.Message}");
+        Console.WriteLine($"[Email] Failed to send confirmation to {toEmail}: {ex.Message}. Try SMTP_PORT=465 if 587 times out (e.g. on Railway).");
     }
 }
 
