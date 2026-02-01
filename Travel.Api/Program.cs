@@ -170,7 +170,10 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
+});
 
 Console.WriteLine("[Startup] JWT authentication configured");
 
@@ -808,6 +811,147 @@ app.MapPost("/payments/webhook", async (PaymentWebhookRequest req, IMongoDatabas
     return Results.BadRequest("Status must be 'paid' or 'failed'.");
 });
 
+// ========== UNIFIED LOGIN (admin or user – same URL; response Role decides admin vs user section) ==========
+
+app.MapPost("/auth/login", async (UnifiedLoginRequest req, IMongoDatabase db) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Login)) return Results.BadRequest("Login is required.");
+    if (string.IsNullOrWhiteSpace(req.Password)) return Results.BadRequest("Password is required.");
+
+    var login = req.Login.Trim();
+    var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? throw new InvalidOperationException("JWT_SECRET not set");
+    var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "steppia-travel-api";
+    var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "steppia-travel-admin";
+    var expiresAt = DateTime.UtcNow.AddHours(8);
+
+    // If login contains '@', treat as user (email); otherwise treat as admin (username)
+    if (login.Contains('@'))
+    {
+        var email = login.ToLowerInvariant();
+        var users = db.GetCollection<User>("users");
+        var user = await users.Find(u => u.Email == email && u.IsActive).FirstOrDefaultAsync();
+        if (user is null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+            return Results.Unauthorized();
+
+        var update = Builders<User>.Update
+            .Set(x => x.LastLoginAt, DateTime.UtcNow)
+            .Set(x => x.UpdatedAt, DateTime.UtcNow);
+        await users.UpdateOneAsync(u => u.Id == user.Id, update);
+
+        var token = GenerateJwtToken(user.Email, user.Role, jwtSecret, jwtIssuer, jwtAudience);
+        return Results.Ok(new UnifiedLoginResponse(
+            token, expiresAt, user.Role,
+            UserId: user.Id.ToString(),
+            Username: null,
+            Email: user.Email,
+            FullName: user.FullName,
+            Phone: user.Phone
+        ));
+    }
+    else
+    {
+        var admins = db.GetCollection<Admin>("admins");
+        var admin = await admins.Find(a => a.Username == login && a.IsActive).FirstOrDefaultAsync();
+        if (admin is null || !BCrypt.Net.BCrypt.Verify(req.Password, admin.PasswordHash))
+            return Results.Unauthorized();
+
+        var update = Builders<Admin>.Update.Set(x => x.LastLoginAt, DateTime.UtcNow);
+        await admins.UpdateOneAsync(a => a.Id == admin.Id, update);
+
+        var token = GenerateJwtToken(admin.Username, admin.Role, jwtSecret, jwtIssuer, jwtAudience);
+        return Results.Ok(new UnifiedLoginResponse(
+            token, expiresAt, admin.Role,
+            UserId: null,
+            Username: admin.Username,
+            Email: admin.Email,
+            FullName: null,
+            Phone: null
+        ));
+    }
+}).AllowAnonymous();
+
+// ========== USER (CUSTOMER) AUTHENTICATION ENDPOINTS ==========
+
+// User Register
+app.MapPost("/user/register", async (UserRegisterRequest req, IMongoDatabase db) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Email)) return Results.BadRequest("Email is required.");
+    if (string.IsNullOrWhiteSpace(req.FullName)) return Results.BadRequest("Full name is required.");
+    if (string.IsNullOrWhiteSpace(req.Password)) return Results.BadRequest("Password is required.");
+    if (req.Password.Length < 6) return Results.BadRequest("Password must be at least 6 characters.");
+
+    var email = req.Email.Trim().ToLowerInvariant();
+    var users = db.GetCollection<User>("users");
+    var existing = await users.Find(u => u.Email == email).FirstOrDefaultAsync();
+    if (existing is not null)
+        return Results.Conflict("Email already registered.");
+
+    var passwordHash = BCrypt.Net.BCrypt.HashPassword(req.Password.Trim());
+    var user = new User
+    {
+        Email = email,
+        FullName = req.FullName.Trim(),
+        Phone = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim(),
+        PasswordHash = passwordHash,
+        Role = "user",
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+    await users.InsertOneAsync(user);
+
+    var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? throw new InvalidOperationException("JWT_SECRET not set");
+    var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "steppia-travel-api";
+    var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "steppia-travel-admin";
+    var token = GenerateJwtToken(user.Email, user.Role, jwtSecret, jwtIssuer, jwtAudience);
+
+    return Results.Created("/user/login", new UserAuthResponse(
+        token,
+        user.Id.ToString(),
+        user.Email,
+        user.FullName,
+        user.Phone,
+        user.Role,
+        DateTime.UtcNow.AddHours(8)
+    ));
+}).AllowAnonymous();
+
+// User Login
+app.MapPost("/user/login", async (UserLoginRequest req, IMongoDatabase db) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Email)) return Results.BadRequest("Email is required.");
+    if (string.IsNullOrWhiteSpace(req.Password)) return Results.BadRequest("Password is required.");
+
+    var email = req.Email.Trim().ToLowerInvariant();
+    var users = db.GetCollection<User>("users");
+    var user = await users.Find(u => u.Email == email && u.IsActive).FirstOrDefaultAsync();
+    if (user is null)
+        return Results.Unauthorized();
+
+    if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+        return Results.Unauthorized();
+
+    var update = Builders<User>.Update
+        .Set(x => x.LastLoginAt, DateTime.UtcNow)
+        .Set(x => x.UpdatedAt, DateTime.UtcNow);
+    await users.UpdateOneAsync(u => u.Id == user.Id, update);
+
+    var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? throw new InvalidOperationException("JWT_SECRET not set");
+    var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "steppia-travel-api";
+    var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "steppia-travel-admin";
+    var token = GenerateJwtToken(user.Email, user.Role, jwtSecret, jwtIssuer, jwtAudience);
+
+    return Results.Ok(new UserAuthResponse(
+        token,
+        user.Id.ToString(),
+        user.Email,
+        user.FullName,
+        user.Phone,
+        user.Role,
+        DateTime.UtcNow.AddHours(8)
+    ));
+}).AllowAnonymous();
+
 // ========== ADMIN AUTHENTICATION ENDPOINTS ==========
 
 // Admin Login
@@ -863,7 +1007,7 @@ app.MapGet("/admin/auth/me", async (ClaimsPrincipal user, IMongoDatabase db) =>
         role = admin.Role,
         lastLoginAt = admin.LastLoginAt
     });
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Refresh token (same as login, returns new token)
 app.MapPost("/admin/auth/refresh", async (ClaimsPrincipal user, IMongoDatabase db) =>
@@ -890,13 +1034,13 @@ app.MapPost("/admin/auth/refresh", async (ClaimsPrincipal user, IMongoDatabase d
         admin.Role,
         DateTime.UtcNow.AddHours(8)
     ));
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Logout (client-side token removal, no server action needed)
 app.MapPost("/admin/auth/logout", () =>
 {
     return Results.Ok(new { message = "Logged out successfully" });
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Change password
 app.MapPut("/admin/auth/change-password", async (ChangePasswordRequest req, ClaimsPrincipal user, IMongoDatabase db) =>
@@ -940,7 +1084,7 @@ app.MapPut("/admin/auth/change-password", async (ChangePasswordRequest req, Clai
         Console.WriteLine($"[Error] PUT /admin/auth/change-password failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // ========== ADMIN TOURS CRUD ENDPOINTS ==========
 
@@ -998,7 +1142,7 @@ app.MapGet("/admin/tours", async (IMongoDatabase db, int page = 1, int pageSize 
         Console.WriteLine($"[Error] /admin/tours failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Create new tour
 app.MapPost("/admin/tours", async (CreateTourRequest req, IMongoDatabase db) =>
@@ -1064,7 +1208,7 @@ app.MapPost("/admin/tours", async (CreateTourRequest req, IMongoDatabase db) =>
         Console.WriteLine($"[Error] POST /admin/tours failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Update tour
 app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoDatabase db) =>
@@ -1147,7 +1291,7 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
         Console.WriteLine($"[Error] PUT /admin/tours/{id} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Delete tour (soft delete - set isActive=false)
 app.MapDelete("/admin/tours/{id}", async (string id, IMongoDatabase db) =>
@@ -1176,7 +1320,7 @@ app.MapDelete("/admin/tours/{id}", async (string id, IMongoDatabase db) =>
         Console.WriteLine($"[Error] DELETE /admin/tours/{id} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // ========== ADMIN TOUR DATES MANAGEMENT ENDPOINTS ==========
 
@@ -1218,7 +1362,7 @@ app.MapGet("/admin/tours/{tourId}/dates", async (string tourId, IMongoDatabase d
         Console.WriteLine($"[Error] GET /admin/tours/{tourId}/dates failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Create tour date
 app.MapPost("/admin/tours/{tourId}/dates", async (string tourId, CreateTourDateRequest req, IMongoDatabase db) =>
@@ -1278,7 +1422,7 @@ app.MapPost("/admin/tours/{tourId}/dates", async (string tourId, CreateTourDateR
         Console.WriteLine($"[Error] POST /admin/tours/{tourId}/dates failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Update tour date
 app.MapPut("/admin/tour-dates/{id}", async (string id, UpdateTourDateRequest req, IMongoDatabase db) =>
@@ -1349,7 +1493,7 @@ app.MapPut("/admin/tour-dates/{id}", async (string id, UpdateTourDateRequest req
         Console.WriteLine($"[Error] PUT /admin/tour-dates/{id} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Delete tour date
 app.MapDelete("/admin/tour-dates/{id}", async (string id, IMongoDatabase db) =>
@@ -1381,7 +1525,7 @@ app.MapDelete("/admin/tour-dates/{id}", async (string id, IMongoDatabase db) =>
         Console.WriteLine($"[Error] DELETE /admin/tour-dates/{id} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Get tour date by ID
 app.MapGet("/admin/tour-dates/{id}", async (string id, IMongoDatabase db) =>
@@ -1416,7 +1560,7 @@ app.MapGet("/admin/tour-dates/{id}", async (string id, IMongoDatabase db) =>
         Console.WriteLine($"[Error] GET /admin/tour-dates/{id} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // ========== ADMIN BOOKINGS MANAGEMENT ENDPOINTS ==========
 
@@ -1510,7 +1654,7 @@ app.MapGet("/admin/bookings", async (
         Console.WriteLine($"[Error] /admin/bookings failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Get booking by ID with full details
 app.MapGet("/admin/bookings/{id}", async (string id, IMongoDatabase db) =>
@@ -1567,7 +1711,7 @@ app.MapGet("/admin/bookings/{id}", async (string id, IMongoDatabase db) =>
         Console.WriteLine($"[Error] /admin/bookings/{id} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Update booking status
 app.MapPut("/admin/bookings/{id}/status", async (string id, UpdateBookingStatusRequest req, IMongoDatabase db) =>
@@ -1603,7 +1747,7 @@ app.MapPut("/admin/bookings/{id}/status", async (string id, UpdateBookingStatusR
         Console.WriteLine($"[Error] PUT /admin/bookings/{id}/status failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // Get booking statistics
 app.MapGet("/admin/bookings/stats", async (IMongoDatabase db) =>
@@ -1663,7 +1807,7 @@ app.MapGet("/admin/bookings/stats", async (IMongoDatabase db) =>
         Console.WriteLine($"[Error] /admin/bookings/stats failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
-}).RequireAuthorization();
+}).RequireAuthorization("AdminOnly");
 
 // ========== PAYMENT STATUS ENDPOINTS ==========
 
