@@ -47,6 +47,39 @@ These have defaults but can be customized:
   - Usually: `8080` or `8000`
   - **Note:** Railway sets this automatically, but verify it matches your service port
 
+### Email confirmation (user registration)
+
+To send the 6-digit confirmation code to users’ email, add SMTP variables. **Without these, the app still runs** but codes are only logged to the console (no email sent).
+
+- [ ] **`SMTP_HOST`**
+  - Description: SMTP server host
+  - Examples: `smtp.gmail.com`, `smtp.sendgrid.net`, `smtp.office365.com`
+
+- [ ] **`SMTP_PORT`**
+  - Default: `587`
+  - Description: SMTP port (587 for TLS)
+
+- [ ] **`SMTP_USERNAME`**
+  - Description: SMTP login (often your email or API username)
+
+- [ ] **`SMTP_PASSWORD`**
+  - Description: SMTP password (for Gmail use an [App Password](https://support.google.com/accounts/answer/185833))
+
+- [ ] **`SMTP_FROM_EMAIL`**
+  - Default: `noreply@example.com`
+  - Description: “From” email address
+
+- [ ] **`SMTP_FROM_NAME`**
+  - Default: `Steppia Travel`
+  - Description: “From” display name
+
+- [ ] **`SMTP_ENABLE_SSL`**
+  - Default: `true`
+  - Description: Use TLS (use `true` for port 587)
+
+**Gmail example:**  
+`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USERNAME=your@gmail.com`, `SMTP_PASSWORD=<App Password>`, `SMTP_FROM_EMAIL=your@gmail.com`
+
 ## How to Set in Railway
 
 1. Go to Railway Dashboard

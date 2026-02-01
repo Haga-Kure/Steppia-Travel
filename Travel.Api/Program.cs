@@ -131,6 +131,7 @@ builder.Services.AddSingleton<IMongoDatabase>(sp =>
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
+    options.SerializerOptions.PropertyNameCaseInsensitive = true;
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
