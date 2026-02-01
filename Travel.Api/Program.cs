@@ -227,10 +227,22 @@ static string GenerateJwtToken(string username, string role, string jwtSecret, s
     return tokenHandler.WriteToken(token);
 }
 
-// Send 6-digit confirmation code to email (uses SMTP from config/env; keys: SMTP_HOST, SMTP_PORT, etc.)
+// Send 6-digit confirmation code to email. Prefer Resend (HTTP) if RESEND_API_KEY is set; else SMTP (often blocked on Railway).
 static async Task SendConfirmationEmailAsync(IConfiguration config, string toEmail, string code)
 {
+    var resendKey = config["RESEND_API_KEY"] ?? Environment.GetEnvironmentVariable("RESEND_API_KEY");
+    if (!string.IsNullOrWhiteSpace(resendKey))
+    {
+        await SendConfirmationEmailViaResendAsync(resendKey, config, toEmail, code);
+        return;
+    }
+
     var host = config["SMTP_HOST"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
+    if (string.IsNullOrWhiteSpace(host))
+    {
+        Console.WriteLine($"[Email] Neither RESEND_API_KEY nor SMTP configured. Confirmation code for {toEmail}: {code}");
+        return;
+    }
     var port = int.TryParse(config["SMTP_PORT"] ?? Environment.GetEnvironmentVariable("SMTP_PORT"), out var p) ? p : 587;
     var user = config["SMTP_USERNAME"] ?? Environment.GetEnvironmentVariable("SMTP_USERNAME");
     var password = config["SMTP_PASSWORD"] ?? Environment.GetEnvironmentVariable("SMTP_PASSWORD");
@@ -254,11 +266,14 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     // Port 465 = SMTPS (implicit SSL); 587 = STARTTLS. Some hosts block 587 – try 465.
     var secureOptions = port == 465 ? SecureSocketOptions.SslOnConnect
         : (useSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
+    var skipSslVerify = string.Equals(config["SMTP_SKIP_SSL_VERIFY"] ?? Environment.GetEnvironmentVariable("SMTP_SKIP_SSL_VERIFY") ?? "false", "true", StringComparison.OrdinalIgnoreCase);
 
     try
     {
         using var client = new SmtpClient();
         client.Timeout = 20000; // 20 seconds
+        if (skipSslVerify)
+            client.ServerCertificateValidationCallback = (_, _, _, _) => true;
         await client.ConnectAsync(host, port, secureOptions);
         if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(password))
             await client.AuthenticateAsync(user, password);
@@ -268,7 +283,8 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Email] Failed to send confirmation to {toEmail}: {ex.Message}. Try SMTP_PORT=465 if 587 times out (e.g. on Railway).");
+        Console.WriteLine($"[Email] Failed to send to {toEmail}: {ex.GetType().Name}: {ex.Message}");
+        Console.WriteLine($"[Email] If using port 465 and you see certificate/SSL errors, set SMTP_SKIP_SSL_VERIFY=true. On Railway, prefer RESEND_API_KEY (HTTP) instead of SMTP.");
     }
 }
 
