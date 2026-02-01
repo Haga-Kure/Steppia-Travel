@@ -230,7 +230,12 @@ static string GenerateJwtToken(string username, string role, string jwtSecret, s
 // Send confirmation email via Resend HTTP API (works when SMTP ports are blocked, e.g. Railway).
 static async Task SendConfirmationEmailViaResendAsync(string apiKey, IConfiguration config, string toEmail, string code)
 {
-    var fromEmail = config["SMTP_FROM_EMAIL"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL") ?? "onboarding@resend.dev";
+    // Resend requires a verified "from" domain. Gmail/Yahoo etc. cannot be verified – use Resend's test sender.
+    var configuredFrom = (config["RESEND_FROM_EMAIL"] ?? Environment.GetEnvironmentVariable("RESEND_FROM_EMAIL")
+        ?? config["SMTP_FROM_EMAIL"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL"))?.Trim();
+    var domain = configuredFrom != null && configuredFrom.Contains('@') ? configuredFrom.Split('@')[^1].ToLowerInvariant() : "";
+    var isFreeEmail = domain is "gmail.com" or "yahoo.com" or "outlook.com" or "hotmail.com";
+    var fromEmail = (!string.IsNullOrWhiteSpace(configuredFrom) && !isFreeEmail) ? configuredFrom : "onboarding@resend.dev";
     var fromName = config["SMTP_FROM_NAME"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "Steppia Travel";
     var from = $"{fromName} <{fromEmail}>";
     var subject = "Your confirmation code";
