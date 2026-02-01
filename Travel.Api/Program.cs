@@ -231,11 +231,6 @@ static string GenerateJwtToken(string username, string role, string jwtSecret, s
 static async Task SendConfirmationEmailAsync(IConfiguration config, string toEmail, string code)
 {
     var host = config["SMTP_HOST"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
-    if (string.IsNullOrWhiteSpace(host))
-    {
-        Console.WriteLine($"[Email] SMTP not configured. Confirmation code for {toEmail}: {code}");
-        return;
-    }
     var port = int.TryParse(config["SMTP_PORT"] ?? Environment.GetEnvironmentVariable("SMTP_PORT"), out var p) ? p : 587;
     var user = config["SMTP_USERNAME"] ?? Environment.GetEnvironmentVariable("SMTP_USERNAME");
     var password = config["SMTP_PASSWORD"] ?? Environment.GetEnvironmentVariable("SMTP_PASSWORD");
@@ -259,15 +254,18 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     try
     {
         using var client = new SmtpClient();
+        client.Timeout = 15000; // 15 seconds – avoid long hangs (e.g. Railway outbound SMTP)
         await client.ConnectAsync(host, port, useSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
         if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(password))
             await client.AuthenticateAsync(user, password);
         await client.SendAsync(message);
         await client.DisconnectAsync(true);
+        Console.WriteLine($"[Email] Host={host} Port={port} User={user} SSL={useSsl}");
         Console.WriteLine($"[Email] Confirmation code sent to {toEmail}");
     }
     catch (Exception ex)
     {
+        Console.WriteLine($"[Email] Host={host} Port={port} User={user} SSL={useSsl}");
         Console.WriteLine($"[Email] Failed to send confirmation to {toEmail}: {ex.Message}");
     }
 }
@@ -957,7 +955,8 @@ app.MapPost("/user/register", async (UserRegisterRequest req, IMongoDatabase db,
     };
     await pendingCol.InsertOneAsync(pending);
 
-    await SendConfirmationEmailAsync(config, email, code);
+    // Send email in background so /user/register returns immediately (avoids timeout/hang)
+    _ = Task.Run(() => SendConfirmationEmailAsync(config, email, code));
 
     return Results.Ok(new { message = "Confirmation code sent to your email. Check your inbox and confirm with the 6-digit code.", expiresInMinutes = 15 });
 }).AllowAnonymous();
