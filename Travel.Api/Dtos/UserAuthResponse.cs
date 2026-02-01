@@ -4,7 +4,8 @@ public record UserAuthResponse(
     string Token,
     string UserId,
     string Email,
-    string FullName,
+    string FirstName,
+    string LastName,
     string? Phone,
     string Role,
     DateTime ExpiresAt

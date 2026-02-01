@@ -10,6 +10,7 @@ public record UnifiedLoginResponse(
     string? UserId,
     string? Username,
     string? Email,
-    string? FullName,
+    string? FirstName,
+    string? LastName,
     string? Phone
 );

@@ -16,7 +16,7 @@ The backend supports a **single login** used for both users and admins. The fron
   - **Admin:** send **username** → backend looks up in `admins` by username.
 
 - **Response (same for both):**  
-  `{ "token": "<JWT>", "expiresAt": "...", "role": "user"|"admin", "userId", "username", "email", "fullName", "phone" }`  
+  `{ "token": "<JWT>", "expiresAt": "...", "role": "user"|"admin", "userId", "username", "email", "firstName", "lastName", "phone" }`  
   (Nullable fields may be `null` depending on role.)
 
 - **No GET /users/me:**  
@@ -27,12 +27,47 @@ The backend supports a **single login** used for both users and admins. The fron
 
 See `FRONTEND_AUTH_FOR_BACKEND.md` in the frontend repo for full detail.
 
+## User registration (email confirmation)
+
+User sign-up is **two steps**. The user is only created after they confirm their email with the 6-digit code.
+
+### Step 1: Register (send code)
+
+- **Endpoint:** `POST /user/register`
+- **Body:**  
+  `{ "email": "...", "firstName": "...", "lastName": "...", "phone": "..." (optional), "password": "..." }`
+- **Backend:** Generates a random **6-digit code**, stores a pending registration (expires in 15 minutes), and **sends the code to the given email** via SMTP.
+- **Response (200):**  
+  `{ "message": "Confirmation code sent to your email. Check your inbox and confirm with the 6-digit code.", "expiresInMinutes": 15 }`
+- **Frontend:** Show a “Check your email” message and a form to enter the **6-digit code** (same email as in step 1).
+
+### Step 2: Confirm email (create user and log in)
+
+- **Endpoint:** `POST /user/confirm-email`
+- **Body:**  
+  `{ "email": "<same email as step 1>", "code": "123456" }`  
+  `code` must be exactly 6 digits (string or number).
+- **Backend:** Finds pending registration by email; if code matches and not expired, **creates the user**, deletes the pending record, issues a JWT, and returns the same auth shape as login.
+- **Response (200):**  
+  `{ "token": "<JWT>", "userId", "email", "firstName", "lastName", "phone", "role": "user", "expiresAt": "..." }`
+- **Frontend:** Store `token` (and user info), then redirect to the logged-in user area (same as after login).
+
+### Errors
+
+- **Register:** 409 if email already registered.
+- **Confirm:** 404 if no pending registration for that email; 400 if code wrong or expired (“Confirmation code expired. Please register again.” or “Invalid confirmation code.”).
+
+Tell the frontend agent: **User registration is two-step: call POST /user/register, then have the user enter the 6-digit code from their email and call POST /user/confirm-email with that email and code to create the account and get the token.**
+
 ## API Endpoints Summary
 
 ```typescript
 const API_ENDPOINTS = {
   // Auth (single login for user and admin)
   authLogin: `${API_BASE_URL}/auth/login`,
+  // User registration (two-step: register then confirm-email)
+  userRegister: `${API_BASE_URL}/user/register`,
+  userConfirmEmail: `${API_BASE_URL}/user/confirm-email`,
   
   // Health
   health: `${API_BASE_URL}/health/mongo`,

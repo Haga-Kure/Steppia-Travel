@@ -11,6 +11,9 @@ using Travel.Api.Dtos;
 using Travel.Api.Models;
 using BCrypt.Net;
 using Microsoft.OpenApi.Models;
+using MailKit.Net.Smtp;
+using MailKit.Security;
+using MimeKit;
 
 // Register MongoDB class maps FIRST, before any MongoDB operations or builder creation
 // Note: Tour class also has [BsonIgnoreExtraElements] attribute for double protection
@@ -221,6 +224,47 @@ static string GenerateJwtToken(string username, string role, string jwtSecret, s
     var tokenHandler = new JwtSecurityTokenHandler();
     var token = tokenHandler.CreateToken(tokenDescriptor);
     return tokenHandler.WriteToken(token);
+}
+
+// Send 6-digit confirmation code to email (uses SMTP from config/env; if not configured, logs code to console)
+static async Task SendConfirmationEmailAsync(IConfiguration config, string toEmail, string code)
+{
+    var host = config["Smtp:Host"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
+    if (string.IsNullOrWhiteSpace(host))
+    {
+        Console.WriteLine($"[Email] SMTP not configured. Confirmation code for {toEmail}: {code}");
+        return;
+    }
+    var port = int.TryParse(config["Smtp:Port"] ?? Environment.GetEnvironmentVariable("SMTP_PORT"), out var p) ? p : 587;
+    var user = config["Smtp:UserName"] ?? Environment.GetEnvironmentVariable("SMTP_USERNAME");
+    var password = config["Smtp:Password"] ?? Environment.GetEnvironmentVariable("SMTP_PASSWORD");
+    var fromEmail = config["Smtp:FromEmail"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL") ?? "noreply@example.com";
+    var fromName = config["Smtp:FromName"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "Steppia Travel";
+    var useSsl = string.Equals(config["Smtp:EnableSsl"] ?? Environment.GetEnvironmentVariable("SMTP_ENABLE_SSL") ?? "true", "true", StringComparison.OrdinalIgnoreCase);
+
+    var message = new MimeMessage();
+    message.From.Add(new MailboxAddress(fromName, fromEmail));
+    message.To.Add(new MailboxAddress(toEmail, toEmail));
+    message.Subject = "Your confirmation code";
+    message.Body = new TextPart("plain")
+    {
+        Text = $"Your confirmation code is: {code}. It expires in 15 minutes."
+    };
+
+    try
+    {
+        using var client = new SmtpClient();
+        await client.ConnectAsync(host, port, useSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
+        if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(password))
+            await client.AuthenticateAsync(user, password);
+        await client.SendAsync(message);
+        await client.DisconnectAsync(true);
+        Console.WriteLine($"[Email] Confirmation code sent to {toEmail}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Email] Failed to send confirmation to {toEmail}: {ex.Message}");
+    }
 }
 
 // Initialize admin user if collection is empty
@@ -844,7 +888,8 @@ app.MapPost("/auth/login", async (UnifiedLoginRequest req, IMongoDatabase db) =>
             UserId: user.Id.ToString(),
             Username: null,
             Email: user.Email,
-            FullName: user.FullName,
+            FirstName: user.FirstName,
+            LastName: user.LastName,
             Phone: user.Phone
         ));
     }
@@ -864,7 +909,8 @@ app.MapPost("/auth/login", async (UnifiedLoginRequest req, IMongoDatabase db) =>
             UserId: null,
             Username: admin.Username,
             Email: admin.Email,
-            FullName: null,
+            FirstName: null,
+            LastName: null,
             Phone: null
         ));
     }
@@ -872,11 +918,12 @@ app.MapPost("/auth/login", async (UnifiedLoginRequest req, IMongoDatabase db) =>
 
 // ========== USER (CUSTOMER) AUTHENTICATION ENDPOINTS ==========
 
-// User Register
-app.MapPost("/user/register", async (UserRegisterRequest req, IMongoDatabase db) =>
+// User Register – sends 6-digit confirmation code to email; user is created only after confirm-email
+app.MapPost("/user/register", async (UserRegisterRequest req, IMongoDatabase db, IConfiguration config) =>
 {
     if (string.IsNullOrWhiteSpace(req.Email)) return Results.BadRequest("Email is required.");
-    if (string.IsNullOrWhiteSpace(req.FullName)) return Results.BadRequest("Full name is required.");
+    if (string.IsNullOrWhiteSpace(req.FirstName)) return Results.BadRequest("First name is required.");
+    if (string.IsNullOrWhiteSpace(req.LastName)) return Results.BadRequest("Last name is required.");
     if (string.IsNullOrWhiteSpace(req.Password)) return Results.BadRequest("Password is required.");
     if (req.Password.Length < 6) return Results.BadRequest("Password must be at least 6 characters.");
 
@@ -886,30 +933,78 @@ app.MapPost("/user/register", async (UserRegisterRequest req, IMongoDatabase db)
     if (existing is not null)
         return Results.Conflict("Email already registered.");
 
+    var pendingCol = db.GetCollection<PendingRegistration>("pending_registrations");
+    await pendingCol.DeleteManyAsync(p => p.Email == email);
+
+    var code = Random.Shared.Next(100000, 999999).ToString();
     var passwordHash = BCrypt.Net.BCrypt.HashPassword(req.Password.Trim());
-    var user = new User
+    var expiresAt = DateTime.UtcNow.AddMinutes(15);
+    var pending = new PendingRegistration
     {
         Email = email,
-        FullName = req.FullName.Trim(),
+        FirstName = req.FirstName.Trim(),
+        LastName = req.LastName.Trim(),
         Phone = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim(),
         PasswordHash = passwordHash,
+        Code = code,
+        CreatedAt = DateTime.UtcNow,
+        ExpiresAt = expiresAt
+    };
+    await pendingCol.InsertOneAsync(pending);
+
+    await SendConfirmationEmailAsync(config, email, code);
+
+    return Results.Ok(new { message = "Confirmation code sent to your email. Check your inbox and confirm with the 6-digit code.", expiresInMinutes = 15 });
+}).AllowAnonymous();
+
+// User Confirm Email – match 6-digit code, then create user and return token
+app.MapPost("/user/confirm-email", async (ConfirmEmailRequest req, IMongoDatabase db) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Email)) return Results.BadRequest("Email is required.");
+    if (string.IsNullOrWhiteSpace(req.Code)) return Results.BadRequest("Code is required.");
+    var code = req.Code.Trim();
+    if (code.Length != 6 || !code.All(char.IsDigit)) return Results.BadRequest("Code must be 6 digits.");
+
+    var email = req.Email.Trim().ToLowerInvariant();
+    var pendingCol = db.GetCollection<PendingRegistration>("pending_registrations");
+    var pending = await pendingCol.Find(p => p.Email == email).FirstOrDefaultAsync();
+    if (pending is null)
+        return Results.NotFound("No pending registration for this email. Please register first.");
+    if (pending.ExpiresAt < DateTime.UtcNow)
+    {
+        await pendingCol.DeleteOneAsync(p => p.Id == pending.Id);
+        return Results.BadRequest("Confirmation code expired. Please register again.");
+    }
+    if (pending.Code != code)
+        return Results.BadRequest("Invalid confirmation code.");
+
+    var users = db.GetCollection<User>("users");
+    var user = new User
+    {
+        Email = pending.Email,
+        FirstName = pending.FirstName,
+        LastName = pending.LastName,
+        Phone = pending.Phone,
+        PasswordHash = pending.PasswordHash,
         Role = "user",
         IsActive = true,
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow
     };
     await users.InsertOneAsync(user);
+    await pendingCol.DeleteOneAsync(p => p.Id == pending.Id);
 
     var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? throw new InvalidOperationException("JWT_SECRET not set");
     var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "steppia-travel-api";
     var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "steppia-travel-admin";
     var token = GenerateJwtToken(user.Email, user.Role, jwtSecret, jwtIssuer, jwtAudience);
 
-    return Results.Created("/user/login", new UserAuthResponse(
+    return Results.Ok(new UserAuthResponse(
         token,
         user.Id.ToString(),
         user.Email,
-        user.FullName,
+        user.FirstName,
+        user.LastName,
         user.Phone,
         user.Role,
         DateTime.UtcNow.AddHours(8)
@@ -945,7 +1040,8 @@ app.MapPost("/user/login", async (UserLoginRequest req, IMongoDatabase db) =>
         token,
         user.Id.ToString(),
         user.Email,
-        user.FullName,
+        user.FirstName,
+        user.LastName,
         user.Phone,
         user.Role,
         DateTime.UtcNow.AddHours(8)
