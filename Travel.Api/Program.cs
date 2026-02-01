@@ -227,6 +227,26 @@ static string GenerateJwtToken(string username, string role, string jwtSecret, s
     return tokenHandler.WriteToken(token);
 }
 
+// Send confirmation email via Resend HTTP API (works when SMTP ports are blocked, e.g. Railway).
+static async Task SendConfirmationEmailViaResendAsync(string apiKey, IConfiguration config, string toEmail, string code)
+{
+    var fromEmail = config["SMTP_FROM_EMAIL"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL") ?? "onboarding@resend.dev";
+    var fromName = config["SMTP_FROM_NAME"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "Steppia Travel";
+    var from = $"{fromName} <{fromEmail}>";
+    var subject = "Your confirmation code";
+    var text = $"Your confirmation code is: {code}. It expires in 15 minutes.";
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+    var body = new { from, to = new[] { toEmail }, subject, text };
+    var json = System.Text.Json.JsonSerializer.Serialize(body);
+    var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+    var response = await http.PostAsync("https://api.resend.com/emails", content);
+    if (response.IsSuccessStatusCode)
+        Console.WriteLine($"[Email] Confirmation code sent to {toEmail} via Resend");
+    else
+        Console.WriteLine($"[Email] Resend failed for {toEmail}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+}
+
 // Send 6-digit confirmation code to email. Prefer Resend (HTTP) if RESEND_API_KEY is set; else SMTP (often blocked on Railway).
 static async Task SendConfirmationEmailAsync(IConfiguration config, string toEmail, string code)
 {
