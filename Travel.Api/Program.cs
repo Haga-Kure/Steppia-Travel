@@ -233,6 +233,7 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     var host = config["Smtp:Host"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
     if (string.IsNullOrWhiteSpace(host))
     {
+        Console.WriteLine($"[Email] SMTP_HOST raw: {config["Smtp:Host"]}");
         Console.WriteLine($"[Email] SMTP not configured. Confirmation code for {toEmail}: {code}");
         return;
     }
