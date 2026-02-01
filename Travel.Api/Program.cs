@@ -227,22 +227,21 @@ static string GenerateJwtToken(string username, string role, string jwtSecret, s
     return tokenHandler.WriteToken(token);
 }
 
-// Send 6-digit confirmation code to email (uses SMTP from config/env; if not configured, logs code to console)
+// Send 6-digit confirmation code to email (uses SMTP from config/env; keys: SMTP_HOST, SMTP_PORT, etc.)
 static async Task SendConfirmationEmailAsync(IConfiguration config, string toEmail, string code)
 {
-    var host = config["Smtp:Host"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
+    var host = config["SMTP_HOST"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
     if (string.IsNullOrWhiteSpace(host))
     {
-        Console.WriteLine($"[Email] SMTP_HOST raw: {config["Smtp:Host"]}");
         Console.WriteLine($"[Email] SMTP not configured. Confirmation code for {toEmail}: {code}");
         return;
     }
-    var port = int.TryParse(config["Smtp:Port"] ?? Environment.GetEnvironmentVariable("SMTP_PORT"), out var p) ? p : 587;
-    var user = config["Smtp:UserName"] ?? Environment.GetEnvironmentVariable("SMTP_USERNAME");
-    var password = config["Smtp:Password"] ?? Environment.GetEnvironmentVariable("SMTP_PASSWORD");
-    var fromEmail = config["Smtp:FromEmail"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL") ?? "noreply@example.com";
-    var fromName = config["Smtp:FromName"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "Steppia Travel";
-    var useSsl = string.Equals(config["Smtp:EnableSsl"] ?? Environment.GetEnvironmentVariable("SMTP_ENABLE_SSL") ?? "true", "true", StringComparison.OrdinalIgnoreCase);
+    var port = int.TryParse(config["SMTP_PORT"] ?? Environment.GetEnvironmentVariable("SMTP_PORT"), out var p) ? p : 587;
+    var user = config["SMTP_USERNAME"] ?? Environment.GetEnvironmentVariable("SMTP_USERNAME");
+    var password = config["SMTP_PASSWORD"] ?? Environment.GetEnvironmentVariable("SMTP_PASSWORD");
+    var fromEmail = config["SMTP_FROM_EMAIL"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL") ?? "noreply@example.com";
+    var fromName = config["SMTP_FROM_NAME"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "Steppia Travel";
+    var useSsl = string.Equals(config["SMTP_ENABLE_SSL"] ?? Environment.GetEnvironmentVariable("SMTP_ENABLE_SSL") ?? "true", "true", StringComparison.OrdinalIgnoreCase);
 
     // Gmail (and many providers) require "From" to be the authenticated address
     if (!string.IsNullOrWhiteSpace(user) && (string.IsNullOrWhiteSpace(fromEmail) || fromEmail.Contains("example.com", StringComparison.OrdinalIgnoreCase)))
@@ -269,7 +268,6 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Email] SMTP_HOST raw: {config["Smtp:Host"]}");
         Console.WriteLine($"[Email] Failed to send confirmation to {toEmail}: {ex.Message}");
     }
 }
