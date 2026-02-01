@@ -230,7 +230,10 @@ static string GenerateJwtToken(string username, string role, string jwtSecret, s
 // Send 6-digit confirmation code to email (uses SMTP from config/env; if not configured, logs code to console)
 static async Task SendConfirmationEmailAsync(IConfiguration config, string toEmail, string code)
 {
-    var host = config["Smtp:Host"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
+    // Read from Smtp:Host (appsettings), SMTP_HOST (env, e.g. Railway), or root SMTP_HOST (appsettings)
+    var host = config["Smtp:Host"]
+        ?? Environment.GetEnvironmentVariable("SMTP_HOST")
+        ?? config["SMTP_HOST"];
     if (string.IsNullOrWhiteSpace(host))
     {
         Console.WriteLine($"[Email] SMTP not configured. Confirmation code for {toEmail}: {code}");
