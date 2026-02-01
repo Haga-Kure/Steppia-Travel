@@ -77,8 +77,11 @@ To send the 6-digit confirmation code to users’ email, add SMTP variables. **W
   - Default: `true`
   - Description: Use TLS (use `true` for port 587)
 
-**Gmail example:**  
-`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USERNAME=your@gmail.com`, `SMTP_PASSWORD=<App Password>`, `SMTP_FROM_EMAIL=your@gmail.com`
+**Gmail:**
+- `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USERNAME=your@gmail.com`, `SMTP_PASSWORD=<App Password>`
+- **SMTP_FROM_EMAIL** must be your Gmail address (e.g. `your@gmail.com`). Gmail rejects sends when "From" is not the authenticated account. If you leave it empty or `noreply@example.com`, the app will use `SMTP_USERNAME` as From when using Gmail.
+- **SMTP_PASSWORD** must be a [Gmail App Password](https://support.google.com/accounts/answer/185833) (16 chars), not your normal Gmail password, especially with 2-Step Verification.
+- If emails still don’t arrive, check Railway logs for `[Email] Failed to send confirmation` to see the SMTP error.
 
 ## How to Set in Railway
 

@@ -243,6 +243,10 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     var fromName = config["Smtp:FromName"] ?? Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? "Steppia Travel";
     var useSsl = string.Equals(config["Smtp:EnableSsl"] ?? Environment.GetEnvironmentVariable("SMTP_ENABLE_SSL") ?? "true", "true", StringComparison.OrdinalIgnoreCase);
 
+    // Gmail (and many providers) require "From" to be the authenticated address
+    if (!string.IsNullOrWhiteSpace(user) && (string.IsNullOrWhiteSpace(fromEmail) || fromEmail.Contains("example.com", StringComparison.OrdinalIgnoreCase)))
+        fromEmail = user;
+
     var message = new MimeMessage();
     message.From.Add(new MailboxAddress(fromName, fromEmail));
     message.To.Add(new MailboxAddress(toEmail, toEmail));
