@@ -272,6 +272,7 @@ static async Task SendConfirmationEmailAsync(IConfiguration config, string toEma
     catch (Exception ex)
     {
         Console.WriteLine($"[Email] Failed to send confirmation to {toEmail}: {ex.Message}");
+        Console.WriteLine($"SMTP_HOST raw: {config["Smtp:Host"]}");
     }
 }
 
