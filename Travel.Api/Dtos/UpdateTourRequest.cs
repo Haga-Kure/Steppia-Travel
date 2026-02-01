@@ -1,15 +1,31 @@
 namespace Travel.Api.Dtos;
 
 public record UpdateTourRequest(
-    string? Slug,
     string? Title,
-    string? Type,
+    string? Subtitle,
     string? Summary,
+    string? Slug,
+    string? BobbleTitle,
     string? Description,
+    string? Overview,
+    string? Type,
     int? DurationDays,
+    int? Nights,
     decimal? BasePrice,
     string? Currency,
     List<TourLocationRequest>? Locations,
+    string? Region,
+    int? TotalDistanceKm,
+    TourAccommodationRequest? Accommodation,
     List<TourImageRequest>? Images,
+    List<string>? Highlights,
+    List<string>? Included,
+    List<string>? Excluded,
+    List<string>? TravelStyle,
+    List<string>? Activities,
+    List<string>? IdealFor,
+    string? Difficulty,
+    string? GroupSize,
+    List<TourItineraryItemRequest>? Itinerary,
     bool? IsActive
 );

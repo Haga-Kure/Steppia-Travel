@@ -20,3 +20,7 @@ public record TourImageRequest(
     string? Alt,
     bool IsCover
 );
+
+public record TourAccommodationRequest(int? HotelNights, int? CampNights, string? Notes);
+
+public record TourItineraryItemRequest(int Day, string? Title, string? Notes, string? Stay, int? DistanceKm);

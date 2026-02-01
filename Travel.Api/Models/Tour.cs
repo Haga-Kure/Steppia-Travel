@@ -41,10 +41,12 @@ public class Tour
 
     [BsonElement("slug")] public string Slug { get; set; } = default!;
     [BsonElement("title")] public string Title { get; set; } = default!;
+    [BsonElement("subtitle")] public string? Subtitle { get; set; }
     [BsonElement("type")] public string Type { get; set; } = default!; // "Private" | "Group"
 
     [BsonElement("summary")] public string? Summary { get; set; }
     [BsonElement("description")] public string? Description { get; set; } // Allow description field from DB
+    [BsonElement("overview")] public string? Overview { get; set; }
 
     [BsonElement("durationDays")] public int DurationDays { get; set; }
 
@@ -54,10 +56,14 @@ public class Tour
     [BsonElement("region")] public string? Region { get; set; }
     [BsonElement("totalDistanceKm")] public int? TotalDistanceKm { get; set; }
     [BsonElement("highlights")] public List<string>? Highlights { get; set; }
+    [BsonElement("included")] public List<string>? Included { get; set; }
+    [BsonElement("excluded")] public List<string>? Excluded { get; set; }
     [BsonElement("accommodation")] public TourAccommodation? Accommodation { get; set; }
     [BsonElement("itinerary")] public List<TourItineraryItem>? Itinerary { get; set; }
     [BsonElement("activities")] public List<string>? Activities { get; set; }
     [BsonElement("idealFor")] public List<string>? IdealFor { get; set; }
+    [BsonElement("difficulty")] public string? Difficulty { get; set; }
+    [BsonElement("groupSize")] public string? GroupSize { get; set; }
 
     [BsonElement("basePrice")] public decimal BasePrice { get; set; }
     [BsonElement("currency")] public string Currency { get; set; } = "USD";

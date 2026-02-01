@@ -1385,20 +1385,34 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
             update = update.Set(x => x.Slug, req.Slug.Trim());
         if (!string.IsNullOrWhiteSpace(req.Title))
             update = update.Set(x => x.Title, req.Title.Trim());
+        if (req.Subtitle is not null)
+            update = update.Set(x => x.Subtitle, req.Subtitle);
         if (!string.IsNullOrWhiteSpace(req.Type))
             update = update.Set(x => x.Type, req.Type.Trim());
         if (req.Summary is not null)
             update = update.Set(x => x.Summary, req.Summary);
         if (req.Description is not null)
             update = update.Set(x => x.Description, req.Description);
+        if (req.Overview is not null)
+            update = update.Set(x => x.Overview, req.Overview);
+        if (req.BobbleTitle is not null)
+            update = update.Set(x => x.BobbleTitle, req.BobbleTitle);
         if (req.DurationDays.HasValue)
             update = update.Set(x => x.DurationDays, req.DurationDays.Value);
+        if (req.Nights.HasValue)
+            update = update.Set(x => x.Nights, req.Nights.Value);
         if (req.BasePrice.HasValue)
             update = update.Set(x => x.BasePrice, req.BasePrice.Value);
         if (!string.IsNullOrWhiteSpace(req.Currency))
             update = update.Set(x => x.Currency, req.Currency);
         if (req.Locations is not null)
             update = update.Set(x => x.Locations, req.Locations.Select(loc => new TourLocation { Name = loc.Name ?? "", Latitude = loc.Latitude, Longitude = loc.Longitude }).ToList());
+        if (req.Region is not null)
+            update = update.Set(x => x.Region, req.Region);
+        if (req.TotalDistanceKm.HasValue)
+            update = update.Set(x => x.TotalDistanceKm, req.TotalDistanceKm.Value);
+        if (req.Accommodation is not null)
+            update = update.Set(x => x.Accommodation, new TourAccommodation { HotelNights = req.Accommodation.HotelNights, CampNights = req.Accommodation.CampNights, Notes = req.Accommodation.Notes });
         if (req.Images is not null)
             update = update.Set(x => x.Images, req.Images.Select(img => new TourImage
             {
@@ -1406,6 +1420,24 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
                 Alt = img.Alt,
                 IsCover = img.IsCover
             }).ToList());
+        if (req.Highlights is not null)
+            update = update.Set(x => x.Highlights, req.Highlights);
+        if (req.Included is not null)
+            update = update.Set(x => x.Included, req.Included);
+        if (req.Excluded is not null)
+            update = update.Set(x => x.Excluded, req.Excluded);
+        if (req.TravelStyle is not null)
+            update = update.Set(x => x.TravelStyle, req.TravelStyle);
+        if (req.Activities is not null)
+            update = update.Set(x => x.Activities, req.Activities);
+        if (req.IdealFor is not null)
+            update = update.Set(x => x.IdealFor, req.IdealFor);
+        if (req.Difficulty is not null)
+            update = update.Set(x => x.Difficulty, req.Difficulty.Trim());
+        if (req.GroupSize is not null)
+            update = update.Set(x => x.GroupSize, req.GroupSize.Trim());
+        if (req.Itinerary is not null)
+            update = update.Set(x => x.Itinerary, req.Itinerary.Select(i => new TourItineraryItem { Day = i.Day, Title = i.Title, Notes = i.Notes, Stay = i.Stay, DistanceKm = i.DistanceKm }).ToList());
         if (req.IsActive.HasValue)
             update = update.Set(x => x.IsActive, req.IsActive.Value);
 
