@@ -615,6 +615,452 @@ app.MapGet("/tours/{slug}/dates", async (string slug, IMongoDatabase db) =>
     }
 });
 
+// ========== EVENTS ENDPOINTS ==========
+
+// List active events with pagination and basic filtering
+app.MapGet("/events", async (
+    IMongoDatabase db,
+    int page = 1,
+    int pageSize = 20,
+    string? search = null,
+    string? type = null,
+    int? year = null,
+    string? region = null
+) =>
+{
+    try
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        var col = db.GetCollection<Event>("events");
+        var filter = Builders<Event>.Filter.Eq(e => e.IsActive, true);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchFilter = Builders<Event>.Filter.Or(
+                Builders<Event>.Filter.Regex(e => e.Title, new BsonRegularExpression(search, "i")),
+                Builders<Event>.Filter.Regex(e => e.Summary, new BsonRegularExpression(search, "i")),
+                Builders<Event>.Filter.Regex(e => e.Description, new BsonRegularExpression(search, "i")),
+                Builders<Event>.Filter.Regex(e => e.EventDetails.Name, new BsonRegularExpression(search, "i"))
+            );
+            filter = Builders<Event>.Filter.And(filter, searchFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            var typeFilter = Builders<Event>.Filter.Eq(e => e.EventDetails.Type, type);
+            filter = Builders<Event>.Filter.And(filter, typeFilter);
+        }
+
+        if (year.HasValue)
+        {
+            var yearFilter = Builders<Event>.Filter.Eq(e => e.EventDetails.Year, year.Value);
+            filter = Builders<Event>.Filter.And(filter, yearFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(region))
+        {
+            var regionFilter = Builders<Event>.Filter.Eq(e => e.Region, region);
+            filter = Builders<Event>.Filter.And(filter, regionFilter);
+        }
+
+        var total = await col.CountDocumentsAsync(filter);
+        var skip = (page - 1) * pageSize;
+        var list = await col.Find(filter)
+            .SortByDescending(e => e.CreatedAt)
+            .Skip(skip)
+            .Limit(pageSize)
+            .ToListAsync();
+
+        var dto = list.Select(e => new EventDto(
+            e.Id.ToString(),
+            e.Slug ?? string.Empty,
+            e.Title ?? string.Empty,
+            new EventInfoDto(
+                e.EventDetails?.Name ?? string.Empty,
+                e.EventDetails?.Type ?? string.Empty,
+                e.EventDetails?.Year ?? 0
+            ),
+            e.Summary,
+            e.Description,
+            e.DurationDays,
+            e.Nights,
+            e.StartDate,
+            e.EndDate,
+            e.BestSeason,
+            e.Region,
+            e.Locations,
+            e.TravelStyle,
+            e.Difficulty,
+            e.GroupType,
+            e.MaxGroupSize,
+            e.PriceUSD,
+            e.Includes,
+            e.Excludes,
+            e.Highlights,
+            e.Images is null ? null : new EventImagesDto(e.Images.Cover, e.Images.Gallery)
+        )).ToList();
+
+        return Results.Ok(new
+        {
+            data = dto,
+            page,
+            pageSize,
+            total,
+            totalPages = (int)Math.Ceiling(total / (double)pageSize)
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Error] /events endpoint failed: {ex.Message}");
+        return Results.Problem(detail: $"Error fetching events: {ex.Message}", statusCode: 500);
+    }
+});
+
+// Get event by slug (public, active only)
+app.MapGet("/events/{slug}", async (string slug, IMongoDatabase db) =>
+{
+    var col = db.GetCollection<Event>("events");
+    var ev = await col.Find(e => e.Slug == slug && e.IsActive).FirstOrDefaultAsync();
+    if (ev is null) return Results.NotFound();
+
+    var dto = new EventDto(
+        ev.Id.ToString(),
+        ev.Slug ?? string.Empty,
+        ev.Title ?? string.Empty,
+        new EventInfoDto(
+            ev.EventDetails?.Name ?? string.Empty,
+            ev.EventDetails?.Type ?? string.Empty,
+            ev.EventDetails?.Year ?? 0
+        ),
+        ev.Summary,
+        ev.Description,
+        ev.DurationDays,
+        ev.Nights,
+        ev.StartDate,
+        ev.EndDate,
+        ev.BestSeason,
+        ev.Region,
+        ev.Locations,
+        ev.TravelStyle,
+        ev.Difficulty,
+        ev.GroupType,
+        ev.MaxGroupSize,
+        ev.PriceUSD,
+        ev.Includes,
+        ev.Excludes,
+        ev.Highlights,
+        ev.Images is null ? null : new EventImagesDto(ev.Images.Cover, ev.Images.Gallery)
+    );
+
+    return Results.Ok(dto);
+});
+
+// ========== ADMIN EVENTS CRUD ENDPOINTS ==========
+
+// Get all events (including inactive) with pagination
+app.MapGet("/admin/events", async (IMongoDatabase db, int page = 1, int pageSize = 20) =>
+{
+    try
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        var col = db.GetCollection<Event>("events");
+        var total = await col.CountDocumentsAsync(FilterDefinition<Event>.Empty);
+        var skip = (page - 1) * pageSize;
+        var list = await col.Find(_ => true)
+            .SortByDescending(e => e.CreatedAt)
+            .Skip(skip)
+            .Limit(pageSize)
+            .ToListAsync();
+
+        var dto = list.Select(e => new AdminEventDto(
+            e.Id.ToString(),
+            e.Slug ?? string.Empty,
+            e.Title ?? string.Empty,
+            new EventInfoDto(
+                e.EventDetails?.Name ?? string.Empty,
+                e.EventDetails?.Type ?? string.Empty,
+                e.EventDetails?.Year ?? 0
+            ),
+            e.Summary,
+            e.Description,
+            e.DurationDays,
+            e.Nights,
+            e.StartDate,
+            e.EndDate,
+            e.BestSeason,
+            e.Region,
+            e.Locations,
+            e.TravelStyle,
+            e.Difficulty,
+            e.GroupType,
+            e.MaxGroupSize,
+            e.PriceUSD,
+            e.Includes,
+            e.Excludes,
+            e.Highlights,
+            e.Images is null ? null : new EventImagesDto(e.Images.Cover, e.Images.Gallery),
+            e.IsActive,
+            e.CreatedAt,
+            e.UpdatedAt
+        )).ToList();
+
+        return Results.Ok(new
+        {
+            data = dto,
+            page,
+            pageSize,
+            total,
+            totalPages = (int)Math.Ceiling(total / (double)pageSize)
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Error] /admin/events failed: {ex.Message}");
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// Create new event
+app.MapPost("/admin/events", async (CreateEventRequest req, IMongoDatabase db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(req.Slug)) return Results.BadRequest("Slug is required.");
+        if (string.IsNullOrWhiteSpace(req.Title)) return Results.BadRequest("Title is required.");
+        if (req.Event is null || string.IsNullOrWhiteSpace(req.Event.Name) || string.IsNullOrWhiteSpace(req.Event.Type))
+            return Results.BadRequest("Event name and type are required.");
+
+        var col = db.GetCollection<Event>("events");
+        var existing = await col.Find(e => e.Slug == req.Slug).FirstOrDefaultAsync();
+        if (existing is not null) return Results.BadRequest("Event with this slug already exists.");
+
+        var ev = new Event
+        {
+            Slug = req.Slug.Trim(),
+            Title = req.Title.Trim(),
+            EventDetails = new EventInfo
+            {
+                Name = req.Event.Name.Trim(),
+                Type = req.Event.Type.Trim(),
+                Year = req.Event.Year
+            },
+            Summary = req.Summary,
+            Description = req.Description,
+            DurationDays = req.DurationDays,
+            Nights = req.Nights,
+            StartDate = req.StartDate,
+            EndDate = req.EndDate,
+            BestSeason = req.BestSeason,
+            Region = req.Region,
+            Locations = req.Locations,
+            TravelStyle = req.TravelStyle,
+            Difficulty = req.Difficulty,
+            GroupType = req.GroupType,
+            MaxGroupSize = req.MaxGroupSize,
+            PriceUSD = req.PriceUSD,
+            Includes = req.Includes,
+            Excludes = req.Excludes,
+            Highlights = req.Highlights,
+            Images = req.Images is null ? null : new EventImages
+            {
+                Cover = req.Images.Cover,
+                Gallery = req.Images.Gallery
+            },
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await col.InsertOneAsync(ev);
+
+        var dto = new AdminEventDto(
+            ev.Id.ToString(),
+            ev.Slug,
+            ev.Title,
+            new EventInfoDto(ev.EventDetails.Name, ev.EventDetails.Type, ev.EventDetails.Year),
+            ev.Summary,
+            ev.Description,
+            ev.DurationDays,
+            ev.Nights,
+            ev.StartDate,
+            ev.EndDate,
+            ev.BestSeason,
+            ev.Region,
+            ev.Locations,
+            ev.TravelStyle,
+            ev.Difficulty,
+            ev.GroupType,
+            ev.MaxGroupSize,
+            ev.PriceUSD,
+            ev.Includes,
+            ev.Excludes,
+            ev.Highlights,
+            ev.Images is null ? null : new EventImagesDto(ev.Images.Cover, ev.Images.Gallery),
+            ev.IsActive,
+            ev.CreatedAt,
+            ev.UpdatedAt
+        );
+
+        return Results.Created($"/admin/events/{ev.Id}", dto);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Error] POST /admin/events failed: {ex.Message}");
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// Update event
+app.MapPut("/admin/events/{id}", async (string id, UpdateEventRequest req, IMongoDatabase db) =>
+{
+    try
+    {
+        if (!ObjectId.TryParse(id, out var eventId))
+            return Results.BadRequest("Invalid event ID.");
+
+        var col = db.GetCollection<Event>("events");
+        var existing = await col.Find(e => e.Id == eventId).FirstOrDefaultAsync();
+        if (existing is null) return Results.NotFound();
+
+        if (!string.IsNullOrWhiteSpace(req.Slug) && req.Slug != existing.Slug)
+        {
+            var slugExists = await col.Find(e => e.Slug == req.Slug && e.Id != eventId).FirstOrDefaultAsync();
+            if (slugExists is not null)
+                return Results.BadRequest("Event with this slug already exists.");
+        }
+
+        var update = Builders<Event>.Update.Set(x => x.UpdatedAt, DateTime.UtcNow);
+
+        if (!string.IsNullOrWhiteSpace(req.Slug))
+            update = update.Set(x => x.Slug, req.Slug.Trim());
+        if (!string.IsNullOrWhiteSpace(req.Title))
+            update = update.Set(x => x.Title, req.Title.Trim());
+        if (req.Event is not null)
+            update = update.Set(x => x.EventDetails, new EventInfo
+            {
+                Name = req.Event.Name?.Trim() ?? "",
+                Type = req.Event.Type?.Trim() ?? "",
+                Year = req.Event.Year
+            });
+        if (req.Summary is not null)
+            update = update.Set(x => x.Summary, req.Summary);
+        if (req.Description is not null)
+            update = update.Set(x => x.Description, req.Description);
+        if (req.DurationDays.HasValue)
+            update = update.Set(x => x.DurationDays, req.DurationDays.Value);
+        if (req.Nights.HasValue)
+            update = update.Set(x => x.Nights, req.Nights.Value);
+        if (req.StartDate.HasValue)
+            update = update.Set(x => x.StartDate, req.StartDate);
+        if (req.EndDate.HasValue)
+            update = update.Set(x => x.EndDate, req.EndDate);
+        if (req.BestSeason is not null)
+            update = update.Set(x => x.BestSeason, req.BestSeason);
+        if (req.Region is not null)
+            update = update.Set(x => x.Region, req.Region);
+        if (req.Locations is not null)
+            update = update.Set(x => x.Locations, req.Locations);
+        if (req.TravelStyle is not null)
+            update = update.Set(x => x.TravelStyle, req.TravelStyle);
+        if (req.Difficulty is not null)
+            update = update.Set(x => x.Difficulty, req.Difficulty);
+        if (req.GroupType is not null)
+            update = update.Set(x => x.GroupType, req.GroupType);
+        if (req.MaxGroupSize.HasValue)
+            update = update.Set(x => x.MaxGroupSize, req.MaxGroupSize);
+        if (req.PriceUSD.HasValue)
+            update = update.Set(x => x.PriceUSD, req.PriceUSD.Value);
+        if (req.Includes is not null)
+            update = update.Set(x => x.Includes, req.Includes);
+        if (req.Excludes is not null)
+            update = update.Set(x => x.Excludes, req.Excludes);
+        if (req.Highlights is not null)
+            update = update.Set(x => x.Highlights, req.Highlights);
+        if (req.Images is not null)
+            update = update.Set(x => x.Images, new EventImages
+            {
+                Cover = req.Images.Cover,
+                Gallery = req.Images.Gallery
+            });
+        if (req.IsActive.HasValue)
+            update = update.Set(x => x.IsActive, req.IsActive.Value);
+
+        await col.UpdateOneAsync(e => e.Id == eventId, update);
+
+        var updated = await col.Find(e => e.Id == eventId).FirstOrDefaultAsync();
+        if (updated is null) return Results.NotFound();
+
+        var dto = new AdminEventDto(
+            updated.Id.ToString(),
+            updated.Slug ?? string.Empty,
+            updated.Title ?? string.Empty,
+            new EventInfoDto(
+                updated.EventDetails?.Name ?? string.Empty,
+                updated.EventDetails?.Type ?? string.Empty,
+                updated.EventDetails?.Year ?? 0
+            ),
+            updated.Summary,
+            updated.Description,
+            updated.DurationDays,
+            updated.Nights,
+            updated.StartDate,
+            updated.EndDate,
+            updated.BestSeason,
+            updated.Region,
+            updated.Locations,
+            updated.TravelStyle,
+            updated.Difficulty,
+            updated.GroupType,
+            updated.MaxGroupSize,
+            updated.PriceUSD,
+            updated.Includes,
+            updated.Excludes,
+            updated.Highlights,
+            updated.Images is null ? null : new EventImagesDto(updated.Images.Cover, updated.Images.Gallery),
+            updated.IsActive,
+            updated.CreatedAt,
+            updated.UpdatedAt
+        );
+
+        return Results.Ok(dto);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Error] PUT /admin/events/{id} failed: {ex.Message}");
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// Soft-delete event
+app.MapDelete("/admin/events/{id}", async (string id, IMongoDatabase db) =>
+{
+    try
+    {
+        if (!ObjectId.TryParse(id, out var eventId))
+            return Results.BadRequest("Invalid event ID.");
+
+        var col = db.GetCollection<Event>("events");
+        var update = Builders<Event>.Update
+            .Set(x => x.IsActive, false)
+            .Set(x => x.UpdatedAt, DateTime.UtcNow);
+
+        await col.UpdateOneAsync(e => e.Id == eventId, update);
+
+        return Results.Ok(new { message = "Event deactivated successfully." });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Error] DELETE /admin/events/{id} failed: {ex.Message}");
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+}).RequireAuthorization("AdminOnly");
+
 app.MapPost("/bookings", async (CreateBookingRequest req, IMongoDatabase db) =>
 {
     // basic validation
