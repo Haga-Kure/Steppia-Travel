@@ -826,6 +826,50 @@ app.MapGet("/admin/events", async (IMongoDatabase db, int page = 1, int pageSize
     }
 }).RequireAuthorization("AdminOnly");
 
+// Get event by slug (admin, includes inactive)
+app.MapGet("/admin/events/{slug}", async (string slug, IMongoDatabase db) =>
+{
+    if (string.IsNullOrWhiteSpace(slug)) return Results.BadRequest("Slug is required.");
+
+    var col = db.GetCollection<Event>("events");
+    var ev = await col.Find(e => e.Slug == slug).FirstOrDefaultAsync();
+    if (ev is null) return Results.NotFound();
+
+    var dto = new AdminEventDto(
+        ev.Id.ToString(),
+        ev.Slug ?? string.Empty,
+        ev.Title ?? string.Empty,
+        new EventInfoDto(
+            ev.EventDetails?.Name ?? string.Empty,
+            ev.EventDetails?.Type ?? string.Empty,
+            ev.EventDetails?.Year ?? 0
+        ),
+        ev.Summary,
+        ev.Description,
+        ev.DurationDays,
+        ev.Nights,
+        ev.StartDate,
+        ev.EndDate,
+        ev.BestSeason,
+        ev.Region,
+        ev.Locations,
+        ev.TravelStyle,
+        ev.Difficulty,
+        ev.GroupType,
+        ev.MaxGroupSize,
+        ev.PriceUSD,
+        ev.Includes,
+        ev.Excludes,
+        ev.Highlights,
+        ev.Images is null ? null : new EventImagesDto(ev.Images.Cover, ev.Images.Gallery),
+        ev.IsActive,
+        ev.CreatedAt,
+        ev.UpdatedAt
+    );
+
+    return Results.Ok(dto);
+}).RequireAuthorization("AdminOnly");
+
 // Create new event
 app.MapPost("/admin/events", async (CreateEventRequest req, IMongoDatabase db) =>
 {
@@ -907,7 +951,7 @@ app.MapPost("/admin/events", async (CreateEventRequest req, IMongoDatabase db) =
             ev.UpdatedAt
         );
 
-        return Results.Created($"/admin/events/{ev.Id}", dto);
+        return Results.Created($"/admin/events/{ev.Slug}", dto);
     }
     catch (Exception ex)
     {
@@ -916,21 +960,21 @@ app.MapPost("/admin/events", async (CreateEventRequest req, IMongoDatabase db) =
     }
 }).RequireAuthorization("AdminOnly");
 
-// Update event
-app.MapPut("/admin/events/{id}", async (string id, UpdateEventRequest req, IMongoDatabase db) =>
+// Update event (by slug)
+app.MapPut("/admin/events/{slug}", async (string slug, UpdateEventRequest req, IMongoDatabase db) =>
 {
     try
     {
-        if (!ObjectId.TryParse(id, out var eventId))
-            return Results.BadRequest("Invalid event ID.");
-
         var col = db.GetCollection<Event>("events");
-        var existing = await col.Find(e => e.Id == eventId).FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(slug))
+            return Results.BadRequest("Slug is required.");
+
+        var existing = await col.Find(e => e.Slug == slug).FirstOrDefaultAsync();
         if (existing is null) return Results.NotFound();
 
         if (!string.IsNullOrWhiteSpace(req.Slug) && req.Slug != existing.Slug)
         {
-            var slugExists = await col.Find(e => e.Slug == req.Slug && e.Id != eventId).FirstOrDefaultAsync();
+            var slugExists = await col.Find(e => e.Slug == req.Slug && e.Id != existing.Id).FirstOrDefaultAsync();
             if (slugExists is not null)
                 return Results.BadRequest("Event with this slug already exists.");
         }
@@ -991,9 +1035,9 @@ app.MapPut("/admin/events/{id}", async (string id, UpdateEventRequest req, IMong
         if (req.IsActive.HasValue)
             update = update.Set(x => x.IsActive, req.IsActive.Value);
 
-        await col.UpdateOneAsync(e => e.Id == eventId, update);
+        await col.UpdateOneAsync(e => e.Id == existing.Id, update);
 
-        var updated = await col.Find(e => e.Id == eventId).FirstOrDefaultAsync();
+        var updated = await col.Find(e => e.Id == existing.Id).FirstOrDefaultAsync();
         if (updated is null) return Results.NotFound();
 
         var dto = new AdminEventDto(
@@ -1032,31 +1076,32 @@ app.MapPut("/admin/events/{id}", async (string id, UpdateEventRequest req, IMong
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Error] PUT /admin/events/{id} failed: {ex.Message}");
+        Console.WriteLine($"[Error] PUT /admin/events/{slug} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
 }).RequireAuthorization("AdminOnly");
 
-// Soft-delete event
-app.MapDelete("/admin/events/{id}", async (string id, IMongoDatabase db) =>
+// Soft-delete event (by slug)
+app.MapDelete("/admin/events/{slug}", async (string slug, IMongoDatabase db) =>
 {
     try
     {
-        if (!ObjectId.TryParse(id, out var eventId))
-            return Results.BadRequest("Invalid event ID.");
-
         var col = db.GetCollection<Event>("events");
+        if (string.IsNullOrWhiteSpace(slug))
+            return Results.BadRequest("Slug is required.");
+
         var update = Builders<Event>.Update
             .Set(x => x.IsActive, false)
             .Set(x => x.UpdatedAt, DateTime.UtcNow);
 
-        await col.UpdateOneAsync(e => e.Id == eventId, update);
+        var result = await col.UpdateOneAsync(e => e.Slug == slug, update);
+        if (result.MatchedCount == 0) return Results.NotFound();
 
         return Results.Ok(new { message = "Event deactivated successfully." });
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Error] DELETE /admin/events/{id} failed: {ex.Message}");
+        Console.WriteLine($"[Error] DELETE /admin/events/{slug} failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
 }).RequireAuthorization("AdminOnly");
