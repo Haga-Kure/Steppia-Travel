@@ -18,13 +18,29 @@ public class TourAccommodation
     [BsonElement("notes")] public string? Notes { get; set; }
 }
 
+/// <summary>Waypoint on the day's route (place + distance to next stop).</summary>
+public class TourItineraryRouteWaypoint
+{
+    [BsonElement("place")] public string Place { get; set; } = string.Empty;
+    [BsonElement("distanceToNextKm")] public int? DistanceToNextKm { get; set; }
+}
+
 public class TourItineraryItem
 {
     [BsonElement("day")] public int Day { get; set; }
     [BsonElement("title")] public string? Title { get; set; }
     [BsonElement("notes")] public string? Notes { get; set; }
+    [BsonElement("breakfast")] public string? Breakfast { get; set; }
+    [BsonElement("lunch")] public string? Lunch { get; set; }
+    [BsonElement("dinner")] public string? Dinner { get; set; }
+    [BsonElement("accommodation")] public string? Accommodation { get; set; }
     [BsonElement("stay")] public string? Stay { get; set; }
     [BsonElement("distanceKm")] public int? DistanceKm { get; set; }
+    [BsonElement("startPlace")] public string? StartPlace { get; set; }
+    [BsonElement("endPlace")] public string? EndPlace { get; set; }
+    [BsonElement("firstSegmentDistanceKm")] public int? FirstSegmentDistanceKm { get; set; }
+    [BsonElement("routeWaypoints")] public List<TourItineraryRouteWaypoint>? RouteWaypoints { get; set; }
+    [BsonElement("imageUrl")] public string? ImageUrl { get; set; }
 }
 
 public class TourLocation

@@ -191,6 +191,27 @@ static string NewBookingCode()
 
 static bool IsExpired(Booking b) => b.ExpiresAt <= DateTime.UtcNow;
 
+static TourItineraryItem MapItineraryItemRequestToModel(TourItineraryItemRequest i)
+{
+    return new TourItineraryItem
+    {
+        Day = i.Day,
+        Title = i.Title,
+        Notes = i.Notes,
+        Breakfast = i.Breakfast,
+        Lunch = i.Lunch,
+        Dinner = i.Dinner,
+        Accommodation = i.Accommodation,
+        Stay = i.Stay,
+        DistanceKm = i.DistanceKm,
+        StartPlace = i.StartPlace,
+        EndPlace = i.EndPlace,
+        FirstSegmentDistanceKm = i.FirstSegmentDistanceKm,
+        RouteWaypoints = i.RouteWaypoints?.Select(w => new TourItineraryRouteWaypoint { Place = w.Place ?? "", DistanceToNextKm = w.DistanceToNextKm }).ToList(),
+        ImageUrl = i.ImageUrl
+    };
+}
+
 static async Task ExpireBookingIfNeeded(IMongoCollection<Booking> bookings, Booking b)
 {
     if (b.Status == BookingStatus.PendingPayment && IsExpired(b))
@@ -1814,6 +1835,7 @@ app.MapPost("/admin/tours", async (CreateTourRequest req, IMongoDatabase db) =>
                 Alt = img.Alt,
                 IsCover = img.IsCover
             }).ToList() ?? new List<TourImage>(),
+            Itinerary = req.Itinerary?.Select(i => MapItineraryItemRequestToModel(i)).ToList(),
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -1928,7 +1950,7 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
         if (req.GroupSize is not null)
             update = update.Set(x => x.GroupSize, req.GroupSize.Trim());
         if (req.Itinerary is not null)
-            update = update.Set(x => x.Itinerary, req.Itinerary.Select(i => new TourItineraryItem { Day = i.Day, Title = i.Title, Notes = i.Notes, Stay = i.Stay, DistanceKm = i.DistanceKm }).ToList());
+            update = update.Set(x => x.Itinerary, req.Itinerary.Select(i => MapItineraryItemRequestToModel(i)).ToList());
         if (req.IsActive.HasValue)
             update = update.Set(x => x.IsActive, req.IsActive.Value);
 
