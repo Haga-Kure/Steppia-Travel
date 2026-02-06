@@ -212,6 +212,27 @@ static TourItineraryItem MapItineraryItemRequestToModel(TourItineraryItemRequest
     };
 }
 
+static List<ItineraryDayDto>? MapItineraryToDto(List<TourItineraryItem>? items)
+{
+    if (items is null || items.Count == 0) return null;
+    return items.Select(i => new ItineraryDayDto(
+        Day: i.Day,
+        Title: i.Title,
+        Notes: i.Notes,
+        Breakfast: i.Breakfast,
+        Lunch: i.Lunch,
+        Dinner: i.Dinner,
+        Accommodation: i.Accommodation,
+        Stay: i.Stay,
+        DistanceKm: i.DistanceKm,
+        StartPlace: i.StartPlace,
+        EndPlace: i.EndPlace,
+        FirstSegmentDistanceKm: i.FirstSegmentDistanceKm,
+        RouteWaypoints: i.RouteWaypoints?.Select(w => new ItineraryRouteWaypointDto(w.Place ?? "", w.DistanceToNextKm)).ToList(),
+        ImageUrl: i.ImageUrl
+    )).ToList();
+}
+
 static async Task ExpireBookingIfNeeded(IMongoCollection<Booking> bookings, Booking b)
 {
     if (b.Status == BookingStatus.PendingPayment && IsExpired(b))
@@ -522,7 +543,7 @@ app.MapGet("/tours", async (
                     TravelStyle: t.TravelStyle,
                     Highlights: t.Highlights,
                     Accommodation: t.Accommodation,
-                    Itinerary: t.Itinerary,
+                    Itinerary: MapItineraryToDto(t.Itinerary),
                     Activities: t.Activities,
                     IdealFor: t.IdealFor,
                     BasePrice: t.BasePrice,
@@ -568,7 +589,32 @@ app.MapGet("/tours/{slug}", async (string slug, IMongoDatabase db) =>
 {
     var col = db.GetCollection<Tour>("tours");
     var tour = await col.Find(t => t.Slug == slug && t.IsActive).FirstOrDefaultAsync();
-    return tour is null ? Results.NotFound() : Results.Ok(tour);
+    if (tour is null) return Results.NotFound();
+
+    var tourDto = new TourDto(
+        Id: tour.Id.ToString(),
+        Slug: tour.Slug ?? string.Empty,
+        Title: tour.Title ?? string.Empty,
+        Type: tour.Type ?? string.Empty,
+        Summary: tour.Summary,
+        Description: tour.Description,
+        DurationDays: tour.DurationDays,
+        Nights: tour.Nights,
+        Region: tour.Region,
+        TotalDistanceKm: tour.TotalDistanceKm,
+        TravelStyle: tour.TravelStyle,
+        Highlights: tour.Highlights,
+        Accommodation: tour.Accommodation,
+        Itinerary: MapItineraryToDto(tour.Itinerary),
+        Activities: tour.Activities,
+        IdealFor: tour.IdealFor,
+        BasePrice: tour.BasePrice,
+        Currency: tour.Currency ?? "USD",
+        Locations: (tour.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
+        Images: tour.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList() ?? new List<TourImageDto>(),
+        BobbleTitle: tour.BobbleTitle
+    );
+    return Results.Ok(tourDto);
 });
 
 // Get available dates for a tour (public)
