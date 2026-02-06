@@ -12,6 +12,20 @@ public class TourLocationListSerializer : SerializerBase<List<TourLocation>>
 {
     private static readonly BsonDocumentSerializer DocumentSerializer = new();
 
+    private static string? GetLocationCoordString(BsonDocument doc, string key)
+    {
+        if (!doc.Contains(key)) return null;
+        var v = doc[key];
+        return v.BsonType switch
+        {
+            BsonType.String => v.AsString,
+            BsonType.Double => v.AsDouble.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            BsonType.Int32 => v.AsInt32.ToString(),
+            BsonType.Int64 => v.AsInt64.ToString(),
+            _ => null
+        };
+    }
+
     public override List<TourLocation> Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
     {
         var reader = context.Reader;
@@ -38,8 +52,8 @@ public class TourLocationListSerializer : SerializerBase<List<TourLocation>>
                 case BsonType.Document:
                     var doc = DocumentSerializer.Deserialize(context, args);
                     var name = doc.GetValue("name", BsonString.Empty).AsString ?? "";
-                    var lat = doc.Contains("latitude") && doc["latitude"].BsonType == BsonType.String ? doc["latitude"].AsString : null;
-                    var lon = doc.Contains("longitude") && doc["longitude"].BsonType == BsonType.String ? doc["longitude"].AsString : null;
+                    var lat = GetLocationCoordString(doc, "latitude");
+                    var lon = GetLocationCoordString(doc, "longitude");
                     list.Add(new TourLocation { Name = name ?? "", Latitude = lat, Longitude = lon });
                     break;
                 default:
