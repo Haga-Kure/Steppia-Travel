@@ -17,6 +17,7 @@ public record UpdateTourRequest(
     string? Region,
     int? TotalDistanceKm,
     TourAccommodationRequest? Accommodation,
+    bool? ClearAccommodation,
     List<TourImageRequest>? Images,
     List<string>? Highlights,
     List<string>? Included,

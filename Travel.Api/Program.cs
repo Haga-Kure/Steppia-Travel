@@ -1822,11 +1822,27 @@ app.MapGet("/admin/tours", async (IMongoDatabase db, int page = 1, int pageSize 
             t.Type ?? string.Empty,
             t.Summary,
             t.Description,
+            t.Overview,
+            t.Subtitle,
+            t.BobbleTitle,
             t.DurationDays,
+            t.Nights,
             t.BasePrice,
             t.Currency ?? "USD",
             (t.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
             t.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList() ?? new List<TourImageDto>(),
+            t.Region,
+            t.TotalDistanceKm,
+            t.Highlights,
+            t.Included,
+            t.Excluded,
+            t.TravelStyle,
+            t.Activities,
+            t.IdealFor,
+            t.Difficulty,
+            t.GroupSize,
+            MapItineraryToDto(t.Itinerary),
+            t.Accommodation,
             t.IsActive,
             t.CreatedAt,
             t.UpdatedAt
@@ -1896,11 +1912,27 @@ app.MapPost("/admin/tours", async (CreateTourRequest req, IMongoDatabase db) =>
             tour.Type,
             tour.Summary,
             tour.Description,
+            tour.Overview,
+            tour.Subtitle,
+            tour.BobbleTitle,
             tour.DurationDays,
+            tour.Nights,
             tour.BasePrice,
             tour.Currency,
             (tour.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
             tour.Images.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList(),
+            tour.Region,
+            tour.TotalDistanceKm,
+            tour.Highlights,
+            tour.Included,
+            tour.Excluded,
+            tour.TravelStyle,
+            tour.Activities,
+            tour.IdealFor,
+            tour.Difficulty,
+            tour.GroupSize,
+            MapItineraryToDto(tour.Itinerary),
+            tour.Accommodation,
             tour.IsActive,
             tour.CreatedAt,
             tour.UpdatedAt
@@ -1916,7 +1948,7 @@ app.MapPost("/admin/tours", async (CreateTourRequest req, IMongoDatabase db) =>
 }).RequireAuthorization("AdminOnly");
 
 // Update tour
-app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoDatabase db) =>
+app.MapPut("/admin/tours/{id}", async (string id, [Microsoft.AspNetCore.Mvc.FromBody] UpdateTourRequest req, IMongoDatabase db) =>
 {
     try
     {
@@ -1929,24 +1961,29 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
         if (tour is null)
             return Results.NotFound();
 
-        // Check slug uniqueness if slug is being updated
-        if (!string.IsNullOrWhiteSpace(req.Slug) && req.Slug != tour.Slug)
+        if (req.Slug is not null)
         {
-            var existing = await col.Find(t => t.Slug == req.Slug && t.Id != tourId).FirstOrDefaultAsync();
-            if (existing is not null)
-                return Results.BadRequest("Tour with this slug already exists.");
+            var slugTrimmed = req.Slug.Trim();
+            if (string.IsNullOrWhiteSpace(slugTrimmed))
+                return Results.BadRequest("Slug cannot be empty.");
+            if (slugTrimmed != tour.Slug)
+            {
+                var existing = await col.Find(t => t.Slug == slugTrimmed && t.Id != tourId).FirstOrDefaultAsync();
+                if (existing is not null)
+                    return Results.BadRequest("Tour with this slug already exists.");
+            }
         }
 
         var update = Builders<Tour>.Update
             .Set(x => x.UpdatedAt, DateTime.UtcNow);
 
-        if (!string.IsNullOrWhiteSpace(req.Slug))
+        if (req.Slug is not null)
             update = update.Set(x => x.Slug, req.Slug.Trim());
-        if (!string.IsNullOrWhiteSpace(req.Title))
+        if (req.Title is not null)
             update = update.Set(x => x.Title, req.Title.Trim());
         if (req.Subtitle is not null)
             update = update.Set(x => x.Subtitle, req.Subtitle);
-        if (!string.IsNullOrWhiteSpace(req.Type))
+        if (req.Type is not null)
             update = update.Set(x => x.Type, req.Type.Trim());
         if (req.Summary is not null)
             update = update.Set(x => x.Summary, req.Summary);
@@ -1962,7 +1999,7 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
             update = update.Set(x => x.Nights, req.Nights.Value);
         if (req.BasePrice.HasValue)
             update = update.Set(x => x.BasePrice, req.BasePrice.Value);
-        if (!string.IsNullOrWhiteSpace(req.Currency))
+        if (req.Currency is not null)
             update = update.Set(x => x.Currency, req.Currency);
         if (req.Locations is not null)
             update = update.Set(x => x.Locations, req.Locations.Select(loc => new TourLocation { Name = loc.Name ?? "", Latitude = loc.Latitude, Longitude = loc.Longitude }).ToList());
@@ -1970,7 +2007,9 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
             update = update.Set(x => x.Region, req.Region);
         if (req.TotalDistanceKm.HasValue)
             update = update.Set(x => x.TotalDistanceKm, req.TotalDistanceKm.Value);
-        if (req.Accommodation is not null)
+        if (req.ClearAccommodation == true)
+            update = update.Set(x => x.Accommodation, (TourAccommodation?)null);
+        else if (req.Accommodation is not null)
             update = update.Set(x => x.Accommodation, new TourAccommodation { HotelNights = req.Accommodation.HotelNights, CampNights = req.Accommodation.CampNights, Notes = req.Accommodation.Notes });
         if (req.Images is not null)
             update = update.Set(x => x.Images, req.Images.Select(img => new TourImage
@@ -1992,9 +2031,9 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
         if (req.IdealFor is not null)
             update = update.Set(x => x.IdealFor, req.IdealFor);
         if (req.Difficulty is not null)
-            update = update.Set(x => x.Difficulty, req.Difficulty.Trim());
+            update = update.Set(x => x.Difficulty, req.Difficulty);
         if (req.GroupSize is not null)
-            update = update.Set(x => x.GroupSize, req.GroupSize.Trim());
+            update = update.Set(x => x.GroupSize, req.GroupSize);
         if (req.Itinerary is not null)
             update = update.Set(x => x.Itinerary, req.Itinerary.Select(i => MapItineraryItemRequestToModel(i)).ToList());
         if (req.IsActive.HasValue)
@@ -2011,11 +2050,27 @@ app.MapPut("/admin/tours/{id}", async (string id, UpdateTourRequest req, IMongoD
             tour.Type ?? string.Empty,
             tour.Summary,
             tour.Description,
+            tour.Overview,
+            tour.Subtitle,
+            tour.BobbleTitle,
             tour.DurationDays,
+            tour.Nights,
             tour.BasePrice,
             tour.Currency ?? "USD",
             (tour.Locations ?? new List<TourLocation>()).Select(loc => new TourLocationDto(loc.Name, loc.Latitude, loc.Longitude)).ToList(),
             tour.Images?.Select(img => new TourImageDto(img.Url, img.Alt, img.IsCover)).ToList() ?? new List<TourImageDto>(),
+            tour.Region,
+            tour.TotalDistanceKm,
+            tour.Highlights,
+            tour.Included,
+            tour.Excluded,
+            tour.TravelStyle,
+            tour.Activities,
+            tour.IdealFor,
+            tour.Difficulty,
+            tour.GroupSize,
+            MapItineraryToDto(tour.Itinerary),
+            tour.Accommodation,
             tour.IsActive,
             tour.CreatedAt,
             tour.UpdatedAt
