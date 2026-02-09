@@ -1,10 +1,9 @@
-﻿namespace Travel.Api.Dtos;
+namespace Travel.Api.Dtos;
 
 public record CreateBookingRequest(
     string TourId,
     string TourType,              // "Private" | "Group"
-    string? TourDateId,           // required for Group
-    DateTime? TravelDate,         // required for Private
+    DateTime? TravelDate,          // required for all
     CreateBookingContact Contact,
     List<CreateBookingGuest> Guests,
     string? SpecialRequests

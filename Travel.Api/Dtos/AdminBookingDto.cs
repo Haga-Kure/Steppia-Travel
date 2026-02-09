@@ -9,7 +9,6 @@ public record AdminBookingDto(
     DateTime? ExpiresAt,
     string TourId,
     TourInfo? Tour,
-    string? TourDateId,
     DateTime? TravelDate,
     string TourType,
     BookingContactDto Contact,

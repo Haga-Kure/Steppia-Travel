@@ -1,4 +1,4 @@
-﻿using MongoDB.Bson;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Travel.Api.Models;
@@ -36,8 +36,7 @@ public class Booking
     [BsonElement("bookingCode")] public string BookingCode { get; set; } = default!;
 
     [BsonElement("tourId")] public ObjectId TourId { get; set; }
-    [BsonElement("tourDateId")] public ObjectId? TourDateId { get; set; } // group departure
-    [BsonElement("travelDate")] public DateTime? TravelDate { get; set; } // private tour date
+    [BsonElement("travelDate")] public DateTime? TravelDate { get; set; }
 
     // store as string for flexibility: "Private" | "Group"
     [BsonElement("tourType")] public string TourType { get; set; } = default!;

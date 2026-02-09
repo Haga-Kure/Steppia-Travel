@@ -617,71 +617,6 @@ app.MapGet("/tours/{slug}", async (string slug, IMongoDatabase db) =>
     return Results.Ok(tourDto);
 });
 
-// Get available dates for a tour (public)
-app.MapGet("/tours/{slug}/dates", async (string slug, IMongoDatabase db) =>
-{
-    try
-    {
-        var tours = db.GetCollection<Tour>("tours");
-        var tour = await tours.Find(t => t.Slug == slug && t.IsActive).FirstOrDefaultAsync();
-        
-        if (tour is null)
-            return Results.NotFound("Tour not found.");
-
-        var tourDates = db.GetCollection<TourDate>("tour_dates");
-        var bookings = db.GetCollection<Booking>("bookings");
-        
-        // Get all open tour dates for this tour that are in the future
-        var now = DateTime.UtcNow;
-        var openDates = await tourDates.Find(d => 
-            d.TourId == tour.Id && 
-            d.Status == TourDateStatus.Open && 
-            d.StartDate >= now
-        ).SortBy(d => d.StartDate).ToListAsync();
-
-        var result = new List<PublicTourDateDto>();
-        
-        foreach (var date in openDates)
-        {
-            // Calculate available spots: capacity - (pending + confirmed bookings)
-            var heldOrConfirmed = Builders<Booking>.Filter.And(
-                Builders<Booking>.Filter.Eq(x => x.TourDateId, date.Id),
-                Builders<Booking>.Filter.In(x => x.Status, new[] { BookingStatus.PendingPayment, BookingStatus.Confirmed }),
-                Builders<Booking>.Filter.Gt(x => x.ExpiresAt, now) // pending holds that haven't expired
-            );
-
-            var seatsUsed = await bookings.CountDocumentsAsync(heldOrConfirmed);
-            var availableSpots = date.Capacity - (int)seatsUsed;
-
-            // Only include dates with available spots
-            if (availableSpots > 0)
-            {
-                // Use price override if available, otherwise use tour base price
-                var price = date.PriceOverride ?? tour.BasePrice;
-                
-                result.Add(new PublicTourDateDto(
-                    date.Id.ToString(),
-                    date.StartDate,
-                    date.EndDate,
-                    availableSpots,
-                    price,
-                    tour.Currency ?? "USD"
-                ));
-            }
-        }
-
-        return Results.Ok(result);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Error] GET /tours/{slug}/dates failed: {ex.Message}");
-        return Results.Problem(
-            detail: $"Error fetching tour dates: {ex.Message}",
-            statusCode: 500
-        );
-    }
-});
-
 // ========== EVENTS ENDPOINTS ==========
 
 // List active events with pagination and basic filtering
@@ -1185,24 +1120,13 @@ app.MapPost("/bookings", async (CreateBookingRequest req, IMongoDatabase db) =>
     var isPrivate = string.Equals(req.TourType, "Private", StringComparison.OrdinalIgnoreCase);
     if (!isGroup && !isPrivate) return Results.BadRequest("TourType must be 'Private' or 'Group'.");
 
-    if (isGroup && string.IsNullOrWhiteSpace(req.TourDateId))
-        return Results.BadRequest("TourDateId is required for Group tours.");
-
-    if (isPrivate && req.TravelDate is null)
-        return Results.BadRequest("TravelDate is required for Private tours.");
+    if (req.TravelDate is null)
+        return Results.BadRequest("TravelDate is required.");
 
     if (!ObjectId.TryParse(req.TourId, out var tourId))
         return Results.BadRequest("Invalid TourId.");
 
-    ObjectId? tourDateId = null;
-    if (!string.IsNullOrWhiteSpace(req.TourDateId))
-    {
-        if (!ObjectId.TryParse(req.TourDateId, out var parsed)) return Results.BadRequest("Invalid TourDateId.");
-        tourDateId = parsed;
-    }
-
     var tours = db.GetCollection<Tour>("tours");
-    var tourDates = db.GetCollection<TourDate>("tour_dates");
     var bookings = db.GetCollection<Booking>("bookings");
 
     var tour = await tours.Find(t => t.Id == tourId && t.IsActive).FirstOrDefaultAsync();
@@ -1211,31 +1135,6 @@ app.MapPost("/bookings", async (CreateBookingRequest req, IMongoDatabase db) =>
     // pricing
     var currency = tour.Currency;
     decimal pricePerBooking = tour.BasePrice;
-
-    TourDate? dateDoc = null;
-    if (isGroup)
-    {
-        dateDoc = await tourDates.Find(d => d.Id == tourDateId && d.TourId == tourId && d.Status == TourDateStatus.Open)
-                                 .FirstOrDefaultAsync();
-        if (dateDoc is null) return Results.BadRequest("TourDate not found or not open.");
-
-        if (dateDoc.PriceOverride is not null)
-            pricePerBooking = dateDoc.PriceOverride.Value;
-
-        // basic capacity check: count seats held by pending_payment (not expired) + confirmed
-        var now = DateTime.UtcNow;
-        var heldOrConfirmed = Builders<Booking>.Filter.And(
-            Builders<Booking>.Filter.Eq(x => x.TourDateId, dateDoc.Id),
-            Builders<Booking>.Filter.In(x => x.Status, new[] { BookingStatus.PendingPayment, BookingStatus.Confirmed }),
-            Builders<Booking>.Filter.Gt(x => x.ExpiresAt, now) // pending holds that haven't expired
-        );
-
-        var seatsUsed = await bookings.CountDocumentsAsync(heldOrConfirmed);
-        var seatsRequested = req.Guests.Count;
-
-        if (seatsUsed + seatsRequested > dateDoc.Capacity)
-            return Results.Conflict("Not enough seats available for this departure.");
-    }
 
     // totals (simple MVP: total = basePrice; if you want per-guest pricing, multiply here)
     var subtotal = pricePerBooking;
@@ -1257,7 +1156,6 @@ app.MapPost("/bookings", async (CreateBookingRequest req, IMongoDatabase db) =>
     {
         BookingCode = code,
         TourId = tour.Id,
-        TourDateId = tourDateId,
         TravelDate = req.TravelDate,
         TourType = isGroup ? "Group" : "Private",
         Contact = new BookingContact
@@ -1346,7 +1244,6 @@ app.MapGet("/bookings/{bookingCode}", async (string bookingCode, IMongoDatabase 
         b.ExpiresAt,
         b.TourId,
         tour = tourInfo,
-        b.TourDateId,
         b.TravelDate,
         b.TourType,
         b.Contact,
@@ -1356,7 +1253,7 @@ app.MapGet("/bookings/{bookingCode}", async (string bookingCode, IMongoDatabase 
     });
 });
 
-app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db) =>
+app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db, IConfiguration config) =>
 {
     if (string.IsNullOrWhiteSpace(req.BookingCode)) return Results.BadRequest("BookingCode is required.");
     if (string.IsNullOrWhiteSpace(req.Provider)) return Results.BadRequest("Provider is required.");
@@ -1375,11 +1272,14 @@ app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db) =>
     if (IsExpired(booking)) return Results.Conflict("Booking expired.");
 
     // --- Provider integration placeholder ---
-    // In real world:
-    // 1) Create invoice/payment intent with provider
-    // 2) Receive invoiceId/checkoutUrl/qrText
+    // In real world (e.g. Stripe): create Checkout Session and use session.Url as checkoutUrl.
+    // Until then: redirect to your frontend payment page. Set PAYMENT_CHECKOUT_BASE_URL in env (e.g. https://steppia-travel.netlify.app).
+    var baseUrl = Environment.GetEnvironmentVariable("PAYMENT_CHECKOUT_BASE_URL")
+        ?? config["Payment:CheckoutBaseUrl"]
+        ?? "https://steppia-travel.netlify.app";
+    baseUrl = baseUrl.TrimEnd('/');
     var invoiceId = $"INV-{Guid.NewGuid():N}".ToUpperInvariant();
-    var checkoutUrl = $"https://example.com/checkout/{invoiceId}";
+    var checkoutUrl = $"{baseUrl}/booking/pay?invoiceId={invoiceId}&bookingCode={req.BookingCode}";
     var qrText = invoiceId; // for QR-based providers
 
     var payment = new Payment
@@ -2114,246 +2014,6 @@ app.MapDelete("/admin/tours/{id}", async (string id, IMongoDatabase db) =>
     }
 }).RequireAuthorization("AdminOnly");
 
-// ========== ADMIN TOUR DATES MANAGEMENT ENDPOINTS ==========
-
-// Get tour dates for a tour
-app.MapGet("/admin/tours/{tourId}/dates", async (string tourId, IMongoDatabase db) =>
-{
-    try
-    {
-        if (!ObjectId.TryParse(tourId, out var tourObjId))
-            return Results.BadRequest("Invalid tour ID.");
-
-        var tours = db.GetCollection<Tour>("tours");
-        var tour = await tours.Find(t => t.Id == tourObjId).FirstOrDefaultAsync();
-        
-        if (tour is null)
-            return Results.NotFound("Tour not found.");
-
-        var tourDates = db.GetCollection<TourDate>("tour_dates");
-        var dates = await tourDates.Find(d => d.TourId == tourObjId)
-            .SortBy(d => d.StartDate)
-            .ToListAsync();
-
-        var dto = dates.Select(d => new TourDateDto(
-            d.Id.ToString(),
-            d.TourId.ToString(),
-            d.StartDate,
-            d.EndDate,
-            d.Capacity,
-            d.PriceOverride,
-            d.Status.ToString(),
-            d.CreatedAt,
-            d.UpdatedAt
-        )).ToList();
-
-        return Results.Ok(dto);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Error] GET /admin/tours/{tourId}/dates failed: {ex.Message}");
-        return Results.Problem(detail: ex.Message, statusCode: 500);
-    }
-}).RequireAuthorization("AdminOnly");
-
-// Create tour date
-app.MapPost("/admin/tours/{tourId}/dates", async (string tourId, CreateTourDateRequest req, IMongoDatabase db) =>
-{
-    try
-    {
-        if (!ObjectId.TryParse(tourId, out var tourObjId))
-            return Results.BadRequest("Invalid tour ID.");
-
-        var tours = db.GetCollection<Tour>("tours");
-        var tour = await tours.Find(t => t.Id == tourObjId).FirstOrDefaultAsync();
-        
-        if (tour is null)
-            return Results.NotFound("Tour not found.");
-
-        if (req.StartDate >= req.EndDate)
-            return Results.BadRequest("StartDate must be before EndDate.");
-
-        if (req.Capacity <= 0)
-            return Results.BadRequest("Capacity must be greater than 0.");
-
-        TourDateStatus status = TourDateStatus.Open;
-        if (!string.IsNullOrWhiteSpace(req.Status) && Enum.TryParse<TourDateStatus>(req.Status, true, out var parsedStatus))
-            status = parsedStatus;
-
-        var tourDates = db.GetCollection<TourDate>("tour_dates");
-        var tourDate = new TourDate
-        {
-            TourId = tourObjId,
-            StartDate = req.StartDate,
-            EndDate = req.EndDate,
-            Capacity = req.Capacity,
-            PriceOverride = req.PriceOverride,
-            Status = status,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await tourDates.InsertOneAsync(tourDate);
-
-        var dto = new TourDateDto(
-            tourDate.Id.ToString(),
-            tourDate.TourId.ToString(),
-            tourDate.StartDate,
-            tourDate.EndDate,
-            tourDate.Capacity,
-            tourDate.PriceOverride,
-            tourDate.Status.ToString(),
-            tourDate.CreatedAt,
-            tourDate.UpdatedAt
-        );
-
-        return Results.Created($"/admin/tour-dates/{tourDate.Id}", dto);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Error] POST /admin/tours/{tourId}/dates failed: {ex.Message}");
-        return Results.Problem(detail: ex.Message, statusCode: 500);
-    }
-}).RequireAuthorization("AdminOnly");
-
-// Update tour date
-app.MapPut("/admin/tour-dates/{id}", async (string id, UpdateTourDateRequest req, IMongoDatabase db) =>
-{
-    try
-    {
-        if (!ObjectId.TryParse(id, out var tourDateId))
-            return Results.BadRequest("Invalid tour date ID.");
-
-        var tourDates = db.GetCollection<TourDate>("tour_dates");
-        var tourDate = await tourDates.Find(d => d.Id == tourDateId).FirstOrDefaultAsync();
-        
-        if (tourDate is null)
-            return Results.NotFound("Tour date not found.");
-
-        // Validate date range if both dates are being updated
-        if (req.StartDate.HasValue && req.EndDate.HasValue && req.StartDate.Value >= req.EndDate.Value)
-            return Results.BadRequest("StartDate must be before EndDate.");
-
-        if (req.StartDate.HasValue && !req.EndDate.HasValue && req.StartDate.Value >= tourDate.EndDate)
-            return Results.BadRequest("StartDate must be before EndDate.");
-
-        if (!req.StartDate.HasValue && req.EndDate.HasValue && tourDate.StartDate >= req.EndDate.Value)
-            return Results.BadRequest("StartDate must be before EndDate.");
-
-        if (req.Capacity.HasValue && req.Capacity.Value <= 0)
-            return Results.BadRequest("Capacity must be greater than 0.");
-
-        var update = Builders<TourDate>.Update
-            .Set(x => x.UpdatedAt, DateTime.UtcNow);
-
-        if (req.StartDate.HasValue)
-            update = update.Set(x => x.StartDate, req.StartDate.Value);
-        if (req.EndDate.HasValue)
-            update = update.Set(x => x.EndDate, req.EndDate.Value);
-        if (req.Capacity.HasValue)
-            update = update.Set(x => x.Capacity, req.Capacity.Value);
-        if (req.PriceOverride.HasValue)
-            update = update.Set(x => x.PriceOverride, req.PriceOverride.Value);
-        if (!string.IsNullOrWhiteSpace(req.Status))
-        {
-            if (Enum.TryParse<TourDateStatus>(req.Status, true, out var newStatus))
-                update = update.Set(x => x.Status, newStatus);
-            else
-                return Results.BadRequest("Invalid status. Must be: Open, SoldOut, or Closed.");
-        }
-
-        await tourDates.UpdateOneAsync(d => d.Id == tourDateId, update);
-
-        // Fetch updated tour date
-        tourDate = await tourDates.Find(d => d.Id == tourDateId).FirstOrDefaultAsync();
-        var dto = new TourDateDto(
-            tourDate!.Id.ToString(),
-            tourDate.TourId.ToString(),
-            tourDate.StartDate,
-            tourDate.EndDate,
-            tourDate.Capacity,
-            tourDate.PriceOverride,
-            tourDate.Status.ToString(),
-            tourDate.CreatedAt,
-            tourDate.UpdatedAt
-        );
-
-        return Results.Ok(dto);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Error] PUT /admin/tour-dates/{id} failed: {ex.Message}");
-        return Results.Problem(detail: ex.Message, statusCode: 500);
-    }
-}).RequireAuthorization("AdminOnly");
-
-// Delete tour date
-app.MapDelete("/admin/tour-dates/{id}", async (string id, IMongoDatabase db) =>
-{
-    try
-    {
-        if (!ObjectId.TryParse(id, out var tourDateId))
-            return Results.BadRequest("Invalid tour date ID.");
-
-        var tourDates = db.GetCollection<TourDate>("tour_dates");
-        var tourDate = await tourDates.Find(d => d.Id == tourDateId).FirstOrDefaultAsync();
-        
-        if (tourDate is null)
-            return Results.NotFound("Tour date not found.");
-
-        // Check if there are any bookings for this tour date
-        var bookings = db.GetCollection<Booking>("bookings");
-        var bookingCount = await bookings.CountDocumentsAsync(b => b.TourDateId == tourDateId);
-        
-        if (bookingCount > 0)
-            return Results.BadRequest($"Cannot delete tour date. There are {bookingCount} booking(s) associated with this tour date.");
-
-        await tourDates.DeleteOneAsync(d => d.Id == tourDateId);
-
-        return Results.Ok(new { message = "Tour date deleted successfully" });
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Error] DELETE /admin/tour-dates/{id} failed: {ex.Message}");
-        return Results.Problem(detail: ex.Message, statusCode: 500);
-    }
-}).RequireAuthorization("AdminOnly");
-
-// Get tour date by ID
-app.MapGet("/admin/tour-dates/{id}", async (string id, IMongoDatabase db) =>
-{
-    try
-    {
-        if (!ObjectId.TryParse(id, out var tourDateId))
-            return Results.BadRequest("Invalid tour date ID.");
-
-        var tourDates = db.GetCollection<TourDate>("tour_dates");
-        var tourDate = await tourDates.Find(d => d.Id == tourDateId).FirstOrDefaultAsync();
-        
-        if (tourDate is null)
-            return Results.NotFound("Tour date not found.");
-
-        var dto = new TourDateDto(
-            tourDate.Id.ToString(),
-            tourDate.TourId.ToString(),
-            tourDate.StartDate,
-            tourDate.EndDate,
-            tourDate.Capacity,
-            tourDate.PriceOverride,
-            tourDate.Status.ToString(),
-            tourDate.CreatedAt,
-            tourDate.UpdatedAt
-        );
-
-        return Results.Ok(dto);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Error] GET /admin/tour-dates/{id} failed: {ex.Message}");
-        return Results.Problem(detail: ex.Message, statusCode: 500);
-    }
-}).RequireAuthorization("AdminOnly");
-
 // ========== ADMIN BOOKINGS MANAGEMENT ENDPOINTS ==========
 
 // Get all bookings with filters and pagination
@@ -2426,7 +2086,6 @@ app.MapGet("/admin/bookings", async (
                 b.ExpiresAt,
                 b.TourId.ToString(),
                 tourInfo,
-                b.TourDateId?.ToString(),
                 b.TravelDate,
                 b.TourType,
                 new BookingContactDto(b.Contact.FullName, b.Contact.Email, b.Contact.Phone, b.Contact.Country),
@@ -2484,7 +2143,6 @@ app.MapGet("/admin/bookings/{id}", async (string id, IMongoDatabase db) =>
             booking.ExpiresAt,
             booking.TourId.ToString(),
             tourInfo,
-            booking.TourDateId?.ToString(),
             booking.TravelDate,
             booking.TourType,
             new BookingContactDto(booking.Contact.FullName, booking.Contact.Email, booking.Contact.Phone, booking.Contact.Country),
