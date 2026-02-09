@@ -29,6 +29,7 @@ public class BookingPricing
     [BsonElement("total")] public decimal Total { get; set; }
 }
 
+[BsonIgnoreExtraElements] // Ignore legacy fields (e.g. tourDateId) when deserializing from MongoDB
 public class Booking
 {
     [BsonId] public ObjectId Id { get; set; }
