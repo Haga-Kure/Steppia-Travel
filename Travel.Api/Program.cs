@@ -1320,8 +1320,10 @@ app.MapPost("/notify/booking", async (NotifyBookingRequest req, IConfiguration c
     // Try env vars first (Railway), then config (some hosts inject here)
     var token = (Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") ?? config["TELEGRAM_BOT_TOKEN"])?.Trim();
     var chatId = (Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID") ?? config["TELEGRAM_CHAT_ID"])?.Trim();
-    Console.WriteLine($"[DEBUG] Token exists? {!string.IsNullOrEmpty(token)}");
-    Console.WriteLine($"[DEBUG] ChatId exists? {!string.IsNullOrEmpty(chatId)}");
+    var tokenLen = token?.Length ?? 0;
+    var chatIdLen = chatId?.Length ?? 0;
+    Console.WriteLine($"[DEBUG] Token exists? {!string.IsNullOrEmpty(token)} (length={tokenLen})");
+    Console.WriteLine($"[DEBUG] ChatId exists? {!string.IsNullOrEmpty(chatId)} (length={chatIdLen})");
     if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
     {
         // Log which TELEGRAM-related env vars exist (names only) to debug Railway config
