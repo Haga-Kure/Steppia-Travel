@@ -414,6 +414,11 @@ var app = builder.Build();
 
 Console.WriteLine($"[Startup] Application built successfully. Listening on: {string.Join(", ", app.Urls)}");
 
+// Log Telegram notify config (values not printed) so deploy logs show if vars are loaded
+var telegramTokenSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN"));
+var telegramChatSet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID"));
+Console.WriteLine($"[Startup] Telegram notify: TELEGRAM_BOT_TOKEN={((telegramTokenSet ? "SET" : "NOT SET"))}, TELEGRAM_CHAT_ID={(telegramChatSet ? "SET" : "NOT SET")}");
+
 // Initialize admin user if collection is empty
 await InitializeAdminUser(app.Services);
 
@@ -1310,10 +1315,11 @@ app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db, ICo
 });
 
 // Telegram booking notification (when customer proceeds to payment). Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on Railway.
-app.MapPost("/notify/booking", async (NotifyBookingRequest req) =>
+app.MapPost("/notify/booking", async (NotifyBookingRequest req, IConfiguration config) =>
 {
-    var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN")?.Trim();
-    var chatId = Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID")?.Trim();
+    // Try env vars first (Railway), then config (some hosts inject here)
+    var token = (Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") ?? config["TELEGRAM_BOT_TOKEN"])?.Trim();
+    var chatId = (Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID") ?? config["TELEGRAM_CHAT_ID"])?.Trim();
     if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
     {
         Console.WriteLine("[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping Telegram notification.");
