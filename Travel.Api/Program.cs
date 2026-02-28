@@ -1312,8 +1312,8 @@ app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db, ICo
 // Telegram booking notification (when customer proceeds to payment). Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on Railway.
 app.MapPost("/notify/booking", async (NotifyBookingRequest req) =>
 {
-    var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
-    var chatId = Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID");
+    var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN")?.Trim();
+    var chatId = Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID")?.Trim();
     if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
     {
         Console.WriteLine("[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping Telegram notification.");
@@ -1342,13 +1342,14 @@ app.MapPost("/notify/booking", async (NotifyBookingRequest req) =>
     var json = System.Text.Json.JsonSerializer.Serialize(body);
     var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
     var res = await http.PostAsync(url, content);
+    var responseBody = await res.Content.ReadAsStringAsync();
 
     if (!res.IsSuccessStatusCode)
     {
-        var err = await res.Content.ReadAsStringAsync();
-        Console.WriteLine($"[Notify] Telegram API error: {res.StatusCode} {err}");
-        return Results.Json(new { error = "Failed to send Telegram message" }, statusCode: 502);
+        Console.WriteLine($"[Notify] Telegram API error: {res.StatusCode} | {responseBody}");
+        return Results.Json(new { error = "Failed to send Telegram message", detail = responseBody }, statusCode: 502);
     }
+    Console.WriteLine("[Notify] Telegram notification sent successfully.");
     return Results.Ok(new { ok = true });
 });
 
