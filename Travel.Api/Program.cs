@@ -72,7 +72,8 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "http://localhost:4200",  // Angular dev server
-                "https://steppia-travel.netlify.app"  // Production frontend (Netlify)
+                "https://steppia-travel.com",  // Production (Vercel + custom domain)
+                "https://www.steppia-travel.com"
             )
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -1273,10 +1274,10 @@ app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db, ICo
 
     // --- Provider integration placeholder ---
     // In real world (e.g. Stripe): create Checkout Session and use session.Url as checkoutUrl.
-    // Until then: redirect to your frontend payment page. Set PAYMENT_CHECKOUT_BASE_URL in env (e.g. https://steppia-travel.netlify.app).
+    // Until then: redirect to your frontend payment page. Set PAYMENT_CHECKOUT_BASE_URL in env (default: https://steppia-travel.com).
     var baseUrl = Environment.GetEnvironmentVariable("PAYMENT_CHECKOUT_BASE_URL")
         ?? config["Payment:CheckoutBaseUrl"]
-        ?? "https://steppia-travel.netlify.app";
+        ?? "https://steppia-travel.com";
     baseUrl = baseUrl.TrimEnd('/');
     var invoiceId = $"INV-{Guid.NewGuid():N}".ToUpperInvariant();
     var checkoutUrl = $"{baseUrl}/booking/pay?invoiceId={invoiceId}&bookingCode={req.BookingCode}";
@@ -1306,6 +1307,49 @@ app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db, ICo
         payment.ProviderCheckoutUrl,
         payment.ProviderQrText
     ));
+});
+
+// Telegram booking notification (when customer proceeds to payment). Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on Railway.
+app.MapPost("/notify/booking", async (NotifyBookingRequest req) =>
+{
+    var token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN");
+    var chatId = Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID");
+    if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
+    {
+        Console.WriteLine("[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping Telegram notification.");
+        return Results.Ok(new { ok = false, reason = "not configured" });
+    }
+
+    var lines = new[]
+    {
+        "🔔 *New booking – Proceed to Payment*",
+        "",
+        $"📋 Code: {req.BookingCode ?? "—"}",
+        $"👤 Customer: {req.CustomerName ?? "—"}",
+        $"✉️ Email: {req.CustomerEmail ?? "—"}",
+        $"📞 Phone: {req.CustomerPhone ?? "—"}",
+        $"🎫 Tour: {req.TourName ?? "—"}",
+        $"👥 Travelers: {req.Travelers?.ToString() ?? "—"}",
+        $"💰 Amount: {req.Amount ?? "—"}",
+        "",
+        "_Send payment details to the customer by email._",
+    };
+    var text = string.Join("\n", lines);
+
+    using var http = new HttpClient();
+    var url = $"https://api.telegram.org/bot{token}/sendMessage";
+    var body = new { chat_id = chatId, text, parse_mode = "Markdown" };
+    var json = System.Text.Json.JsonSerializer.Serialize(body);
+    var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+    var res = await http.PostAsync(url, content);
+
+    if (!res.IsSuccessStatusCode)
+    {
+        var err = await res.Content.ReadAsStringAsync();
+        Console.WriteLine($"[Notify] Telegram API error: {res.StatusCode} {err}");
+        return Results.Json(new { error = "Failed to send Telegram message" }, statusCode: 502);
+    }
+    return Results.Ok(new { ok = true });
 });
 
 app.MapPost("/payments/webhook", async (PaymentWebhookRequest req, IMongoDatabase db) =>
