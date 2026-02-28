@@ -1320,6 +1320,8 @@ app.MapPost("/notify/booking", async (NotifyBookingRequest req, IConfiguration c
     // Try env vars first (Railway), then config (some hosts inject here)
     var token = (Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") ?? config["TELEGRAM_BOT_TOKEN"])?.Trim();
     var chatId = (Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID") ?? config["TELEGRAM_CHAT_ID"])?.Trim();
+    Console.WriteLine($"[DEBUG] Token exists? {!string.IsNullOrEmpty(token)}");
+    Console.WriteLine($"[DEBUG] ChatId exists? {!string.IsNullOrEmpty(chatId)}");
     if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
     {
         Console.WriteLine("[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping Telegram notification.");
