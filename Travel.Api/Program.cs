@@ -1317,23 +1317,26 @@ app.MapPost("/payments", async (CreatePaymentRequest req, IMongoDatabase db, ICo
 // Telegram booking notification (when customer proceeds to payment). Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on Railway.
 app.MapPost("/notify/booking", async (NotifyBookingRequest req, IConfiguration config) =>
 {
-    // Try env vars first (Railway), then config (some hosts inject here)
-    var token = (Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") ?? config["TELEGRAM_BOT_TOKEN"])?.Trim();
-    var chatId = (Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID") ?? config["TELEGRAM_CHAT_ID"])?.Trim();
-    var tokenLen = token?.Length ?? 0;
-    var chatIdLen = chatId?.Length ?? 0;
-    Console.WriteLine($"[DEBUG] Token exists? {!string.IsNullOrEmpty(token)} (length={tokenLen})");
-    Console.WriteLine($"[DEBUG] ChatId exists? {!string.IsNullOrEmpty(chatId)} (length={chatIdLen})");
+    // Read from env; Railway sometimes adds trailing/leading space to variable names, so match by trimmed key
+    string? token = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") ?? config["TELEGRAM_BOT_TOKEN"];
+    string? chatId = Environment.GetEnvironmentVariable("TELEGRAM_CHAT_ID") ?? config["TELEGRAM_CHAT_ID"];
     if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
     {
-        // Log TELEGRAM-related env vars and their value lengths (Railway often shows keys but empty values)
         var env = Environment.GetEnvironmentVariables();
         foreach (var key in env.Keys.Cast<string>().Where(k => k != null && k.IndexOf("TELEGRAM", StringComparison.OrdinalIgnoreCase) >= 0))
         {
-            var val = env[key]?.ToString() ?? "";
-            Console.WriteLine($"[Notify] Env {key} value length = {val.Length}");
+            var keyTrimmed = key?.Trim();
+            if (string.Equals(keyTrimmed, "TELEGRAM_BOT_TOKEN", StringComparison.OrdinalIgnoreCase))
+                token = env[key]?.ToString()?.Trim();
+            if (string.Equals(keyTrimmed, "TELEGRAM_CHAT_ID", StringComparison.OrdinalIgnoreCase))
+                chatId = env[key]?.ToString()?.Trim();
         }
-        Console.WriteLine("[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping. In Railway: set Variables for this service, paste the VALUE (token + chat ID), Save, then Redeploy.");
+    }
+    token = token?.Trim();
+    chatId = chatId?.Trim();
+    if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
+    {
+        Console.WriteLine("[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping.");
         return Results.Ok(new { ok = false, reason = "not configured" });
     }
 
