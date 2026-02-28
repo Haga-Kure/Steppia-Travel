@@ -1326,12 +1326,14 @@ app.MapPost("/notify/booking", async (NotifyBookingRequest req, IConfiguration c
     Console.WriteLine($"[DEBUG] ChatId exists? {!string.IsNullOrEmpty(chatId)} (length={chatIdLen})");
     if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
     {
-        // Log which TELEGRAM-related env vars exist (names only) to debug Railway config
-        var telegramVars = Environment.GetEnvironmentVariables()
-            .Keys.Cast<string>()
-            .Where(k => k != null && k.IndexOf("TELEGRAM", StringComparison.OrdinalIgnoreCase) >= 0)
-            .ToList();
-        Console.WriteLine($"[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping. Env vars with 'TELEGRAM': {(telegramVars.Count > 0 ? string.Join(", ", telegramVars) : "(none)")}");
+        // Log TELEGRAM-related env vars and their value lengths (Railway often shows keys but empty values)
+        var env = Environment.GetEnvironmentVariables();
+        foreach (var key in env.Keys.Cast<string>().Where(k => k != null && k.IndexOf("TELEGRAM", StringComparison.OrdinalIgnoreCase) >= 0))
+        {
+            var val = env[key]?.ToString() ?? "";
+            Console.WriteLine($"[Notify] Env {key} value length = {val.Length}");
+        }
+        Console.WriteLine("[Notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set; skipping. In Railway: set Variables for this service, paste the VALUE (token + chat ID), Save, then Redeploy.");
         return Results.Ok(new { ok = false, reason = "not configured" });
     }
 
