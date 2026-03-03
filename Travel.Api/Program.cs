@@ -766,6 +766,37 @@ app.MapGet("/events/{slug}", async (string slug, IMongoDatabase db) =>
     return Results.Ok(dto);
 });
 
+// ========== AGENCY SECTION (PUBLIC) ==========
+
+// Get current agency section (singleton; public, no auth)
+app.MapGet("/agency-section", async (IMongoDatabase db) =>
+{
+    try
+    {
+        var col = db.GetCollection<AgencySection>("agency_section");
+        var section = await col.Find(_ => true).FirstOrDefaultAsync();
+        if (section is null)
+        {
+            return Results.Ok(new AgencySectionDto(null, null, null, null, null, null));
+        }
+        var teamDto = section.Team?.Select(m => new AgencyTeamMemberDto(m.Id, m.Name ?? "", m.Title ?? "", m.ImageUrl ?? "")).ToList();
+        var dto = new AgencySectionDto(
+            section.Heading,
+            section.Subtitle,
+            section.Description,
+            section.LogoUrl,
+            section.BrandName,
+            teamDto
+        );
+        return Results.Ok(dto);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Error] /agency-section failed: {ex.Message}");
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
 // ========== ADMIN EVENTS CRUD ENDPOINTS ==========
 
 // Get all events (including inactive) with pagination
@@ -1110,6 +1141,55 @@ app.MapDelete("/admin/events/{slug}", async (string slug, IMongoDatabase db) =>
     catch (Exception ex)
     {
         Console.WriteLine($"[Error] DELETE /admin/events/{slug} failed: {ex.Message}");
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// ========== ADMIN AGENCY SECTION ==========
+
+// Replace full agency section (admin only); add/delete card = send full team array
+app.MapPut("/admin/agency-section", async (AgencySectionDto req, IMongoDatabase db) =>
+{
+    try
+    {
+        if (req.Team != null)
+        {
+            foreach (var m in req.Team)
+            {
+                if (string.IsNullOrWhiteSpace(m.Name)) return Results.BadRequest("Team member name is required.");
+                if (string.IsNullOrWhiteSpace(m.Title)) return Results.BadRequest("Team member title is required.");
+                if (string.IsNullOrWhiteSpace(m.ImageUrl)) return Results.BadRequest("Team member imageUrl is required.");
+            }
+        }
+        var col = db.GetCollection<AgencySection>("agency_section");
+        var teamList = new List<AgencyTeamMember>();
+        foreach (var m in req.Team ?? new List<AgencyTeamMemberDto>())
+        {
+            var id = !string.IsNullOrWhiteSpace(m.Id) ? m.Id : "tm-" + Guid.NewGuid().ToString("N")[..8];
+            teamList.Add(new AgencyTeamMember { Id = id, Name = m.Name, Title = m.Title, ImageUrl = m.ImageUrl });
+        }
+        var section = new AgencySection
+        {
+            Id = "agency-section-singleton",
+            Heading = req.Heading,
+            Subtitle = req.Subtitle,
+            Description = req.Description,
+            LogoUrl = req.LogoUrl,
+            BrandName = req.BrandName,
+            Team = teamList.Count > 0 ? teamList : null
+        };
+        await col.ReplaceOneAsync(
+            Builders<AgencySection>.Filter.Eq(x => x.Id, "agency-section-singleton"),
+            section,
+            new ReplaceOptions { IsUpsert = true }
+        );
+        var teamDto = section.Team?.Select(m => new AgencyTeamMemberDto(m.Id, m.Name ?? "", m.Title ?? "", m.ImageUrl ?? "")).ToList();
+        var saved = new AgencySectionDto(section.Heading, section.Subtitle, section.Description, section.LogoUrl, section.BrandName, teamDto);
+        return Results.Ok(saved);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Error] PUT /admin/agency-section failed: {ex.Message}");
         return Results.Problem(detail: ex.Message, statusCode: 500);
     }
 }).RequireAuthorization("AdminOnly");
